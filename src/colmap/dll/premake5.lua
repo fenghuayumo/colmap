@@ -15,11 +15,13 @@ project "colmap"
 	includedirs
 	{
 		"../../",
+        "../../thirdparty/PoseLib",
 	}
 
 	externalincludedirs
 	{
 		"%{IncludeDir.Package}",
+        "%{IncludeDir.Package}/suitesparse/",
 	}
 
     libdirs
@@ -52,7 +54,10 @@ project "colmap"
         "OpenGL32",
         "metis",
         "GKlib",
-        "glomap"
+        "glomap",
+        "libcxsparse.lib",
+        "libcholmod.lib",
+        "suitesparseconfig.lib"
     }
 
 	defines

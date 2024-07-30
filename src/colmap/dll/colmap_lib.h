@@ -33,7 +33,7 @@
 #include <memory>
 
 namespace colmap {
-    class AutomaticReconstructionController;
+    class SparseReconstructionController;
 }
 
 struct COLMAP_API ColmapSparseReconstruct {
@@ -50,10 +50,11 @@ struct COLMAP_API ColmapSparseReconstruct {
         Quality quality = Quality::Low;
         bool use_gpu = true;
         std::string camera_model= "SIMPLE_PINHOLE";
+        bool use_glomap = false;
     }option;
     int GetSparseReconstructPhase();
     float GetProgressOnCurrentPhase();
     auto run()->bool;
 
-    std::shared_ptr<colmap::AutomaticReconstructionController>  controller_;
+    std::shared_ptr<colmap::SparseReconstructionController>  controller_;
 };
