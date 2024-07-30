@@ -6,7 +6,9 @@
 
 #include <iostream>
 #include <queue>
-
+#ifndef M_PI
+#define M_PI 3.1415926
+#endif
 namespace glomap {
 namespace {
 double RelAngleError(double angle_12, double angle_1, double angle_2) {

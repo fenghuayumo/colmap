@@ -2,7 +2,7 @@
 
 #include <colmap/estimators/cost_functions.h>
 #include <colmap/sensor/models.h>
-
+#include <colmap/estimators/manifold.h>
 namespace glomap {
 
 bool BundleAdjuster::Solve(const ViewGraph& view_graph,

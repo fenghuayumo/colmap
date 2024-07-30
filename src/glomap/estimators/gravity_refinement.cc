@@ -4,7 +4,7 @@
 #include "glomap/math/gravity.h"
 
 #include <colmap/estimators/cost_functions.h>
-
+#include <colmap/estimators/manifold.h>
 namespace glomap {
 void GravityRefiner::RefineGravity(const ViewGraph& view_graph,
                                    std::unordered_map<image_t, Image>& images) {

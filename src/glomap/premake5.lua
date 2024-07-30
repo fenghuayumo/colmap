@@ -28,6 +28,7 @@ project "glomap"
 	externalincludedirs
 	{
 		"%{IncludeDir.Package}",
+        "%{IncludeDir.Package}/suitesparse/",
         "../"
 	}
 

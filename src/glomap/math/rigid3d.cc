@@ -1,6 +1,9 @@
 #include "glomap/math/rigid3d.h"
 
 #include "glomap/scene/camera.h"
+#ifndef M_PI
+#define M_PI 3.1415926
+#endif
 
 namespace glomap {
 
