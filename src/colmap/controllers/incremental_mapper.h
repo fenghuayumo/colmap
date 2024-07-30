@@ -196,7 +196,8 @@ class IncrementalMapperController : public BaseController {
   bool CheckRunGlobalRefinement(const Reconstruction& reconstruction,
                                 size_t ba_prev_num_reg_images,
                                 size_t ba_prev_num_points);
-
+  float GetProgress() {return progress_;}
+  float progress_;
  private:
   const std::shared_ptr<const IncrementalMapperOptions> options_;
   const std::string image_path_;

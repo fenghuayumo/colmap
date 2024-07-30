@@ -114,7 +114,22 @@ macro(COLMAP_ADD_EXECUTABLE)
             PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-header-filter=.*")
     endif()
 endmacro(COLMAP_ADD_EXECUTABLE)
-
+macro(COLMAP_ADD_DLL)
+    set(options)
+    set(oneValueArgs)
+    set(multiValueArgs NAME SRCS PRIVATE_LINK_LIBS PUBLIC_LINK_LIBS)
+    cmake_parse_arguments(COLMAP_ADD_DLL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    add_library(${COLMAP_ADD_DLL_NAME} SHARED ${COLMAP_ADD_DLL_SRCS})
+    set_target_properties(${COLMAP_ADD_DLL_NAME} PROPERTIES FOLDER
+        ${COLMAP_TARGETS_ROOT_FOLDER}/${FOLDER_NAME})
+    if(CLANG_TIDY_EXE)
+        set_target_properties(${COLMAP_ADD_DLL_NAME}
+            PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-header-filter=.*")
+    endif()
+    target_link_libraries(${COLMAP_ADD_DLL_NAME}
+        PRIVATE ${COLMAP_ADD_DLL_PRIVATE_LINK_LIBS}
+        PUBLIC ${COLMAP_ADD_DLL_PUBLIC_LINK_LIBS})
+endmacro(COLMAP_ADD_LIBRARY)
 # Wrapper for test executables.
 macro(COLMAP_ADD_TEST)
     set(options)

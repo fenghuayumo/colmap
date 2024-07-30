@@ -191,7 +191,8 @@ class ExhaustivePairGenerator : public PairGenerator {
   bool HasFinished() const override;
 
   std::vector<std::pair<image_t, image_t>> Next() override;
-
+  float GetProgress() {return progress_;}
+  float progress_ = 0.0;
  private:
   const ExhaustiveMatchingOptions options_;
   const std::vector<image_t> image_ids_;
@@ -222,7 +223,8 @@ class VocabTreePairGenerator : public PairGenerator {
   bool HasFinished() const override;
 
   std::vector<std::pair<image_t, image_t>> Next() override;
-
+  float GetProgress() { return progress_; }
+  float progress_ = 0.0;
  private:
   void IndexImages(const std::vector<image_t>& image_ids);
 
@@ -263,7 +265,8 @@ class SequentialPairGenerator : public PairGenerator {
   bool HasFinished() const override;
 
   std::vector<std::pair<image_t, image_t>> Next() override;
-
+  float GetProgress() { return progress_; }
+  float progress_ = 0.0;
  private:
   std::vector<image_t> GetOrderedImageIds() const;
 
@@ -293,7 +296,8 @@ class SpatialPairGenerator : public PairGenerator {
   bool HasFinished() const override;
 
   std::vector<std::pair<image_t, image_t>> Next() override;
-
+  float GetProgress() { return progress_; }
+  float progress_ = 0.0;
  private:
   Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::RowMajor> ReadLocationData(
       const FeatureMatcherCache& cache);
@@ -327,7 +331,8 @@ class ImportedPairGenerator : public PairGenerator {
   bool HasFinished() const override;
 
   std::vector<std::pair<image_t, image_t>> Next() override;
-
+  float GetProgress() { return progress_; }
+  float progress_ = 0.0;
  private:
   const ImagePairsMatchingOptions options_;
   std::vector<std::pair<image_t, image_t>> image_pairs_;

@@ -171,6 +171,7 @@ void HierarchicalMapperController::Run() {
       std::max(1, num_eff_threads / num_eff_workers);
 
   // Function to reconstruct one cluster using incremental mapping.
+  std::mutex c_mutex;
   auto ReconstructCluster =
       [&, this](const SceneClustering::Cluster& cluster,
                 std::shared_ptr<ReconstructionManager> reconstruction_manager) {
@@ -191,11 +192,14 @@ void HierarchicalMapperController::Run() {
               image_id_to_name.at(image_id));
         }
 
-        IncrementalMapperController mapper(std::move(incremental_options),
+        auto mapper = std::make_shared<IncrementalMapperController>(std::move(incremental_options),
                                            options_.image_path,
                                            options_.database_path,
                                            std::move(reconstruction_manager));
-        mapper.Run();
+        c_mutex.try_lock();
+        mappers.emplace_back(mapper);
+        c_mutex.unlock();
+        mapper->Run();
       };
 
   // Start reconstructing the bigger clusters first for better resource usage.
@@ -238,6 +242,17 @@ void HierarchicalMapperController::Run() {
   *reconstruction_manager_ = *reconstruction_managers.begin()->second;
 
   run_timer.PrintMinutes();
+}
+
+float HierarchicalMapperController::GetProgress()
+{
+  if( mappers.empty() )
+    return 0.0f;
+  float progress = 1.0f;
+  for(auto m : mappers){
+      progress = std::min(progress, m->GetProgress());
+  }
+  return progress;
 }
 
 }  // namespace colmap

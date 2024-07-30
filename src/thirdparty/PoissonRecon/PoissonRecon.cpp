@@ -294,15 +294,57 @@ Point3D< unsigned char > ReadASCIIColor( FILE* fp )
 	return c;
 }
 
-PlyProperty PlyColorProperties[]=
-{
-	{ "r"     , PLY_UCHAR , PLY_UCHAR , int( offsetof( Point3D< unsigned char > , coords[0] ) ) , 0 , 0 , 0 , 0 } ,
-	{ "g"     , PLY_UCHAR , PLY_UCHAR , int( offsetof( Point3D< unsigned char > , coords[1] ) ) , 0 , 0 , 0 , 0 } ,
-	{ "b"     , PLY_UCHAR , PLY_UCHAR , int( offsetof( Point3D< unsigned char > , coords[2] ) ) , 0 , 0 , 0 , 0 } ,
-	{ "red"   , PLY_UCHAR , PLY_UCHAR , int( offsetof( Point3D< unsigned char > , coords[0] ) ) , 0 , 0 , 0 , 0 } ,
-	{ "green" , PLY_UCHAR , PLY_UCHAR , int( offsetof( Point3D< unsigned char > , coords[1] ) ) , 0 , 0 , 0 , 0 } ,
-	{ "blue"  , PLY_UCHAR , PLY_UCHAR , int( offsetof( Point3D< unsigned char > , coords[2] ) ) , 0 , 0 , 0 , 0 }
-};
+char initProps[][6] = {"r", "g", "b", "red", "green", "blue"};
+PlyProperty PlyColorProperties[] = {
+    {initProps[0],
+     PLY_UCHAR,
+     PLY_UCHAR,
+     int(offsetof(Point3D<unsigned char>, coords[0])),
+     0,
+     0,
+     0,
+     0},
+    {initProps[1],
+     PLY_UCHAR,
+     PLY_UCHAR,
+     int(offsetof(Point3D<unsigned char>, coords[1])),
+     0,
+     0,
+     0,
+     0},
+    {initProps[2],
+     PLY_UCHAR,
+     PLY_UCHAR,
+     int(offsetof(Point3D<unsigned char>, coords[2])),
+     0,
+     0,
+     0,
+     0},
+    {initProps[3],
+     PLY_UCHAR,
+     PLY_UCHAR,
+     int(offsetof(Point3D<unsigned char>, coords[0])),
+     0,
+     0,
+     0,
+     0},
+    {initProps[4],
+     PLY_UCHAR,
+     PLY_UCHAR,
+     int(offsetof(Point3D<unsigned char>, coords[1])),
+     0,
+     0,
+     0,
+     0},
+    {initProps[5],
+     PLY_UCHAR,
+     PLY_UCHAR,
+     int(offsetof(Point3D<unsigned char>, coords[2])),
+     0,
+     0,
+     0,
+     0}};
+
 
 bool ValidPlyColorProperties( const bool* props ){ return ( props[0] || props[3] ) && ( props[1] || props[4] ) && ( props[2] || props[5] ); }
 
@@ -382,12 +424,22 @@ int _Execute( int argc , char* argv[] )
 	SparseNodeData< ProjectiveColor , DATA_DEGREE >* colorData = NULL;
 
 	char* ext = GetFileExtension( In.value );
+    char bnpts[] = "bnpts";
+    char ply[] = "ply";
+
 	if( Color.set && Color.value>0 )
 	{
 		colorData = new SparseNodeData< ProjectiveColor , DATA_DEGREE >();
 		OrientedPointStreamWithData< float , Point3D< unsigned char > >* pointStream;
-		if     ( !strcasecmp( ext , "bnpts" ) ) pointStream = new BinaryOrientedPointStreamWithData< float , Point3D< unsigned char > >( In.value );
-		else if( !strcasecmp( ext , "ply"   ) ) pointStream = new    PLYOrientedPointStreamWithData< float , Point3D< unsigned char > >( In.value , PlyColorProperties , 6 , ValidPlyColorProperties );
+                if (!strcasecmp(ext, bnpts))
+                  pointStream = new BinaryOrientedPointStreamWithData<
+                      float,
+                      Point3D<unsigned char> >(In.value);
+                else if (!strcasecmp(ext, ply))
+                  pointStream = new PLYOrientedPointStreamWithData<
+                      float,
+                      Point3D<unsigned char> >(
+                      In.value, PlyColorProperties, 6, ValidPlyColorProperties);
 		else                                    pointStream = new  ASCIIOrientedPointStreamWithData< float , Point3D< unsigned char > >( In.value , ReadASCIIColor );
 		pointCount = tree.template SetTree< float , NORMAL_DEGREE , WEIGHT_DEGREE , DATA_DEGREE , Point3D< unsigned char > >( pointStream , MinDepth.value , Depth.value , FullDepth.value , kernelDepth , Real(SamplesPerNode.value) , Scale.value , Confidence.set , NormalWeights.set , PointWeight.value , AdaptiveExponent.value , *densityWeights , *pointInfo , *normalInfo , *nodeWeights , colorData , xForm , Dirichlet.set , Complete.set );
 		delete pointStream;
@@ -401,8 +453,9 @@ int _Execute( int argc , char* argv[] )
 	else
 	{
 		OrientedPointStream< float >* pointStream;
-		if     ( !strcasecmp( ext , "bnpts" ) ) pointStream = new BinaryOrientedPointStream< float >( In.value );
-		else if( !strcasecmp( ext , "ply"   ) ) pointStream = new    PLYOrientedPointStream< float >( In.value );
+		if     ( !strcasecmp( ext , bnpts ) ) pointStream = new BinaryOrientedPointStream< float >( In.value );
+                else if (!strcasecmp(ext, ply))
+                  pointStream = new PLYOrientedPointStream<float>(In.value);
 		else                                    pointStream = new  ASCIIOrientedPointStream< float >( In.value );
 		pointCount = tree.template SetTree< float , NORMAL_DEGREE , WEIGHT_DEGREE , DATA_DEGREE , Point3D< unsigned char > >( pointStream , MinDepth.value , Depth.value , FullDepth.value , kernelDepth , Real(SamplesPerNode.value) , Scale.value , Confidence.set , NormalWeights.set , PointWeight.value , AdaptiveExponent.value , *densityWeights , *pointInfo , *normalInfo , *nodeWeights , colorData , xForm , Dirichlet.set , Complete.set );
 		delete pointStream;

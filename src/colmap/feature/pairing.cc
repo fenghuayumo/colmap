@@ -204,7 +204,7 @@ std::vector<std::pair<image_t, image_t>> ExhaustivePairGenerator::Next() {
                             num_blocks_,
                             start_idx2_ / block_size_ + 1,
                             num_blocks_);
-
+  progress_ = (float)(start_idx1_ * block_size_ + start_idx2_) / num_blocks_;
   for (size_t idx1 = start_idx1_; idx1 <= end_idx1; ++idx1) {
     for (size_t idx2 = start_idx2_; idx2 <= end_idx2; ++idx2) {
       const size_t block_id1 = idx1 % block_size_;

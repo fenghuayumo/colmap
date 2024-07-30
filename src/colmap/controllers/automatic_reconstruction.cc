@@ -32,6 +32,7 @@
 #include "colmap/controllers/feature_extraction.h"
 #include "colmap/controllers/feature_matching.h"
 #include "colmap/controllers/incremental_mapper.h"
+#include "colmap/controllers/hierarchical_mapper.h"
 #include "colmap/controllers/option_manager.h"
 #include "colmap/image/undistortion.h"
 #include "colmap/mvs/fusion.h"
@@ -144,17 +145,34 @@ void AutomaticReconstructionController::Stop() {
   Thread::Stop();
 }
 
+int AutomaticReconstructionController::GetSparseReconstructPhase() {
+  return status_phase;
+}
+
+float AutomaticReconstructionController::GetProgressOnCurrentPhase() {
+  if (status_phase == 1) {
+    return feature_extractor_->GetProgress();
+  } else if (status_phase == 2) {
+    return exhaustive_matcher_->GetProgress();
+  } else if (status_phase == 3) {
+    if(!options_.use_hierachy)
+        return incremental_mapper->GetProgress();
+    return hierarchical_mapper->GetProgress();
+  }
+  return 1.0f;
+}
+
 void AutomaticReconstructionController::Run() {
   if (IsStopped()) {
     return;
   }
-
+  status_phase = 1;
   RunFeatureExtraction();
 
   if (IsStopped()) {
     return;
   }
-
+  status_phase = 2;
   RunFeatureMatching();
 
   if (IsStopped()) {
@@ -168,7 +186,7 @@ void AutomaticReconstructionController::Run() {
   if (IsStopped()) {
     return;
   }
-
+  status_phase = 4;
   if (options_.dense) {
     RunDenseMapper();
   }
@@ -179,7 +197,7 @@ void AutomaticReconstructionController::RunFeatureExtraction() {
   active_thread_ = feature_extractor_.get();
   feature_extractor_->Start();
   feature_extractor_->Wait();
-  feature_extractor_.reset();
+  // feature_extractor_.reset();
   active_thread_ = nullptr;
 }
 
@@ -202,9 +220,9 @@ void AutomaticReconstructionController::RunFeatureMatching() {
   active_thread_ = matcher;
   matcher->Start();
   matcher->Wait();
-  exhaustive_matcher_.reset();
-  sequential_matcher_.reset();
-  vocab_tree_matcher_.reset();
+  // exhaustive_matcher_.reset();
+  // sequential_matcher_.reset();
+  // vocab_tree_matcher_.reset();
   active_thread_ = nullptr;
 }
 
@@ -223,12 +241,27 @@ void AutomaticReconstructionController::RunSparseMapper() {
     }
   }
 
-  IncrementalMapperController mapper(option_manager_.mapper,
+  incremental_mapper = std::make_shared<IncrementalMapperController>(option_manager_.mapper,
                                      *option_manager_.image_path,
                                      *option_manager_.database_path,
                                      reconstruction_manager_);
-  mapper.SetCheckIfStoppedFunc([&]() { return IsStopped(); });
-  mapper.Run();
+  HierarchicalMapperController::Options mapper_options;
+  mapper_options.database_path = *option_manager_.database_path;
+  mapper_options.image_path = *option_manager_.image_path;
+  mapper_options.incremental_options = *option_manager_.mapper;
+  hierarchical_mapper = std::make_shared<HierarchicalMapperController>(mapper_options, reconstruction_manager_);
+
+  status_phase = 3;
+  if(!options_.use_hierachy)
+  { 
+      incremental_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
+      incremental_mapper->Run();
+  }
+  else
+  {
+      hierarchical_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
+      hierarchical_mapper->Run();
+  }
 
   CreateDirIfNotExists(sparse_path);
   reconstruction_manager_->Write(sparse_path);

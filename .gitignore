@@ -14,6 +14,66 @@ data/
 doc/_build
 vcpkg_installed/
 
+# User-specific files
+*.code-workspace
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+[Mm]inSizeRel/
+[Rr]elWithDebInfo/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+Build/
+#visual studio
+*.vcxproj
+*.tlog
+*.lastbuildstate
+*.sln
+*.log
+*.cd
+*.cache
+*.filters
+*.opensdf
+*.user
+*.suo
+*.sdf
+*.pdb
+*.cxx
+*.unsuccessfulbuild
+*.vspx
+*.exp
+*.ilk
+*.psess
+*.etl
+*.db
+*.opendb
+*.db-shm
+*.db-shm
+
+*.pbxproj
+*.pc
+*.makeDebug
+*.xcsettings
+*.xcuserstate
+*.makeRelease
+*.makeMinSizeRel
+*.makeRelWithDebInfo
+*.xcworkspacedata
+*.make
+*.pc
+
 # Compiled Object files
 *.slo
 *.lo

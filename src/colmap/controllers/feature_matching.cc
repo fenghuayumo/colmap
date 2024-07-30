@@ -63,7 +63,8 @@ class GenericFeatureMatcher : public Thread {
     THROW_CHECK(matching_options.Check());
     THROW_CHECK(geometry_options.Check());
   }
-
+  float GetProgress() {return progress_;}
+  float progress_ = 0.0;
  private:
   void Run() override {
     PrintHeading1("Feature matching");
@@ -86,6 +87,7 @@ class GenericFeatureMatcher : public Thread {
       timer.Start();
       const std::vector<std::pair<image_t, image_t>> image_pairs =
           pair_generator.Next();
+      progress_ = pair_generator.GetProgress();
       DatabaseTransaction database_transaction(database_.get());
       matcher_.Match(image_pairs);
       PrintElapsedTime(timer);

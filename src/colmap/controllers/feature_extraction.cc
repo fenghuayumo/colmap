@@ -427,7 +427,8 @@ class FeatureExtractorController : public Thread {
     writer_ = std::make_unique<FeatureWriterThread>(
         image_reader_.NumImages(), &database_, writer_queue_.get());
   }
-
+  float GetProgress(){return progress_;};
+  float progress_ = 0.0;
  private:
   void Run() override {
     PrintHeading1("Feature extraction");
@@ -475,6 +476,7 @@ class FeatureExtractorController : public Thread {
       } else {
         THROW_CHECK(extractor_queue_->Push(std::move(image_data)));
       }
+      progress_ = (float)image_reader_.NextIndex() / image_reader_.NumImages();
     }
 
     resizer_queue_->Wait();

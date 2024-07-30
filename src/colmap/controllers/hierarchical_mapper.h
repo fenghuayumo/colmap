@@ -72,7 +72,8 @@ class HierarchicalMapperController : public BaseController {
       std::shared_ptr<ReconstructionManager> reconstruction_manager);
 
   void Run() override;
-
+  float GetProgress();
+  std::vector<std::shared_ptr<class IncrementalMapperController>> mappers;
  private:
   const Options options_;
   std::shared_ptr<ReconstructionManager> reconstruction_manager_;

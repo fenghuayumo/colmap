@@ -134,7 +134,7 @@ class Thread {
 
   // Get timing information of the thread, properly accounting for pause times.
   const Timer& GetTimer() const;
-
+  virtual float GetProgress() { return 1.0f; }
  protected:
   // This is the main run function to be implemented by the child class. If you
   // are looping over data and want to support the pause operation, call
