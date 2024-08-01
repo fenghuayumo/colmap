@@ -153,7 +153,7 @@ void SparseReconstructionController::Run() {
   if (IsStopped()) {
     return;
   }
-
+  status_phase = 3;
   RunSparseMapper();
 
   if (IsStopped()) {
