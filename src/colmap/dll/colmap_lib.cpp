@@ -23,6 +23,7 @@ auto ColmapSparseReconstruct::run() ->bool
     _option.camera_model = option.camera_model;
     _option.use_hierachy = option.use_hierachy;
     _option.use_glomapper = option.use_glomap;
+    _option.output_sparse_points = option.output_sparse_points;
     _option.data_type = option.video ? colmap::SparseReconstructionController::DataType::VIDEO :
         colmap::SparseReconstructionController::DataType::INDIVIDUAL;
     std::shared_ptr<colmap::ReconstructionManager> reconstruction_manager_ =
@@ -39,6 +40,20 @@ auto ColmapSparseReconstruct::run() ->bool
         return false;
     }
     if(controller_->GetSparseReconstructPhase() != 4) return false;
+    if( controller_->NumReconstructions() >= 1){
+        const auto& pts = controller_->Points3D(0);
+        const auto& cams = controller_->Cameras(0);
+        for(const auto& [_,p] : pts){
+          colmap::SparsePoint pt;
+          pt.xyz =  colmap::vec3<double>{p.xyz.x(), p.xyz.y(), p.xyz.z()};
+          pt.color = colmap::vec3<unsigned char>{p.color.x(), p.color.y(), p.color.z()};
+          points.push_back(pt);
+        }
+        for(const auto& [_,c] : cams){
+          cameras.push_back(
+              {c.camera_id, (int)c.model_id, c.width, c.height, c.params});
+        }
+    }
     return true;
 }
 

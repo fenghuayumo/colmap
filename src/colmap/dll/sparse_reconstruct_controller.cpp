@@ -253,10 +253,27 @@ void SparseReconstructionController::RunSparseMapper() {
     incremental_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
     incremental_mapper->Run();
   }
- 
-  CreateDirIfNotExists(sparse_path);
-  reconstruction_manager_->Write(sparse_path);
-  option_manager_.Write(JoinPaths(sparse_path, "project.ini"));
+  if( options_.output_sparse_points ){
+    CreateDirIfNotExists(sparse_path);
+    reconstruction_manager_->Write(sparse_path);
+    option_manager_.Write(JoinPaths(sparse_path, "project.ini"));
+  }
+}
+
+const std::unordered_map<point3D_t, struct Point3D>& SparseReconstructionController::Points3D(int id) const
+{
+  if( id < reconstruction_manager_->Size()){
+    return reconstruction_manager_->Get(id)->Points3D();
+  }
+  return {};
+}
+
+const std::unordered_map<camera_t, struct Camera>& SparseReconstructionController::Cameras(int id) const
+{
+  if( id < reconstruction_manager_->Size()){
+    return reconstruction_manager_->Get(id)->Cameras();
+  }
+  return {};
 }
 
 }  // namespace colmap

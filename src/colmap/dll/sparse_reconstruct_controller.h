@@ -58,6 +58,7 @@ class SparseReconstructionController : public Thread {
 
     bool use_hierachy = true;
     bool use_glomapper = false;
+    bool output_sparse_points = false;
   };
 
   SparseReconstructionController(
@@ -66,6 +67,9 @@ class SparseReconstructionController : public Thread {
 
   void Stop() override;
 
+  const std::unordered_map<point3D_t, struct Point3D>& Points3D(int id) const;
+  const std::unordered_map<camera_t, struct Camera>& Cameras(int id) const;
+  int   NumReconstructions() const {return reconstruction_manager_->Size();}
   int GetSparseReconstructPhase();
   float GetProgressOnCurrentPhase();
   int status_phase = 0;

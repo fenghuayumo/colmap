@@ -31,9 +31,29 @@
 
 #include <string>
 #include <memory>
-
+#include <vector>
 namespace colmap {
     class SparseReconstructionController;
+}
+
+namespace colmap{
+    
+    template<typename T>
+    struct vec3 {
+        T x,y,z;
+    };
+
+    struct SparsePoint{
+        vec3<double> xyz;
+        vec3<unsigned char> color;
+    };
+    struct CameraTrack {
+        uint32_t camera_id;
+        int model_id;
+        size_t width = 0;
+        size_t height = 0;
+        std::vector<double> params;
+    };
 }
 
 struct COLMAP_API ColmapSparseReconstruct {
@@ -51,10 +71,13 @@ struct COLMAP_API ColmapSparseReconstruct {
         bool use_gpu = true;
         std::string camera_model= "SIMPLE_PINHOLE";
         bool use_glomap = false;
+        bool output_sparse_points = false;
     }option;
     int GetSparseReconstructPhase();
     float GetProgressOnCurrentPhase();
     auto run()->bool;
 
+    std::vector<colmap::SparsePoint>   points;
+    std::vector<colmap::CameraTrack>    cameras;  
     std::shared_ptr<colmap::SparseReconstructionController>  controller_;
 };
