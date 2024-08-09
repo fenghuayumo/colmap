@@ -11,7 +11,7 @@
 #include "colmap/mvs/patch_match.h"
 #include "colmap/util/logging.h"
 #include "colmap/util/misc.h"
-#include "glomap/controllers/global_mapper.h"
+// #include "glomap/controllers/global_mapper.h"
 #include "glomap/controllers/option_manager.h"
 #include "glomap/io/colmap_io.h"
 #include "glomap/types.h"
@@ -217,22 +217,21 @@ void SparseReconstructionController::RunSparseMapper() {
     glomap::GlobalMapperOptions glomapOptions;
 
     glomap::ViewGraph view_graph;
-    std::unordered_map<glomap::camera_t, glomap::Camera> cameras;
-    std::unordered_map<glomap::image_t, glomap::Image> images;
-    std::unordered_map<glomap::track_t, glomap::Track> tracks;
 
     const colmap::Database database(*option_manager_.database_path);
     glomap::ConvertDatabaseToGlomap(database, view_graph, cameras, images);
-
+    std::cout << "glomap mapper start\n";
     glomap::GlobalMapper global_mapper(glomapOptions);
     global_mapper.Solve(database, view_graph, cameras, images, tracks);
-    WriteGlomapReconstruction(sparse_path,
-                              cameras,
-                              images,
-                              tracks,
-                              "bin",
-                              *option_manager_.image_path);
-    LOG(INFO) << "Export to COLMAP reconstruction done";
+    if( options_.output_sparse_points ){
+      WriteGlomapReconstruction(sparse_path,
+                                cameras,
+                                images,
+                                tracks,
+                                "bin",
+                                *option_manager_.image_path);
+      LOG(INFO) << "Export to COLMAP reconstruction done";
+    }
   }
   else if(options_.use_hierachy)
   { 

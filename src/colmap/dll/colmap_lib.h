@@ -51,7 +51,7 @@ namespace colmap{
     };
 
     struct SparsePoint{
-        vec3<double> xyz;
+        vec3<float> xyz;
         vec3<unsigned char> color;
     };
     struct CameraTrack {

@@ -4,7 +4,7 @@
 #include "colmap/controllers/option_manager.h"
 #include "colmap/scene/reconstruction_manager.h"
 #include "colmap/util/threading.h"
-
+#include "glomap/controllers/global_mapper.h"
 #include <memory>
 #include <string>
 
@@ -74,6 +74,10 @@ class SparseReconstructionController : public Thread {
   int GetSparseReconstructPhase();
   float GetProgressOnCurrentPhase();
   int status_phase = 0;
+  
+    std::unordered_map<glomap::camera_t, glomap::Camera> cameras;
+    std::unordered_map<glomap::image_t, glomap::Image> images;
+    std::unordered_map<glomap::track_t, glomap::Track> tracks;
  private:
   void Run() override;
   void RunFeatureExtraction();
