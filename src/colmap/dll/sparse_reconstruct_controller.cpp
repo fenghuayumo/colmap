@@ -276,4 +276,12 @@ const std::unordered_map<camera_t, struct Camera>& SparseReconstructionControlle
   return {};
 }
 
+const std::unordered_map<image_t, class Image>&
+SparseReconstructionController::Images(int id) const {
+  if (id < reconstruction_manager_->Size()) {
+    return reconstruction_manager_->Get(id)->Images();
+  }
+  return {};
+}
+
 }  // namespace colmap

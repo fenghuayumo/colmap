@@ -69,6 +69,7 @@ class SparseReconstructionController : public Thread {
 
   const std::unordered_map<point3D_t, struct Point3D>& Points3D(int id) const;
   const std::unordered_map<camera_t, struct Camera>& Cameras(int id) const;
+  const std::unordered_map<image_t, class Image>& Images(int id) const;
   int   NumReconstructions() const {return reconstruction_manager_->Size();}
   int GetSparseReconstructPhase();
   float GetProgressOnCurrentPhase();

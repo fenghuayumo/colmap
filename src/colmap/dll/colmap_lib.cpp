@@ -40,25 +40,63 @@ auto ColmapSparseReconstruct::run() ->bool
         return false;
     }
     if(controller_->GetSparseReconstructPhase() != 4) return false;
-    if( controller_->NumReconstructions() >= 1){
-        const auto& pts = controller_->Points3D(0);
-        const auto& cams = controller_->Cameras(0);
-        for(const auto& [_,p] : pts){
-          colmap::SparsePoint pt;
-          pt.xyz =  colmap::vec3<double>{p.xyz.x(), p.xyz.y(), p.xyz.z()};
-          pt.color = colmap::vec3<unsigned char>{p.color.x(), p.color.y(), p.color.z()};
-          points.push_back(pt);
-        }
-        for(const auto& [_,c] : cams){
-          cameras.push_back(
-              {c.camera_id, (int)c.model_id, c.width, c.height, c.params});
-        }
-    }
     return true;
 }
 
 ColmapSparseReconstruct::~ColmapSparseReconstruct()
 {
+}
+
+auto ColmapSparseReconstruct::getPoints3D(int id) const
+-> std::vector<colmap::SparsePoint> {
+  std::vector<colmap::SparsePoint> points;
+  if (controller_->NumReconstructions() >= 1) {
+    const auto& pts = controller_->Points3D(id);
+    for (const auto& [_, p] : pts) {
+      colmap::SparsePoint pt;
+      pt.xyz = colmap::vec3<double>{p.xyz.x(), p.xyz.y(), p.xyz.z()};
+      pt.color =
+          colmap::vec3<unsigned char>{p.color.x(), p.color.y(), p.color.z()};
+      points.push_back(pt);
+    }
+  }
+  return points;
+}
+
+
+auto ColmapSparseReconstruct::getCameraTracks(int id) const
+-> std::vector<colmap::CameraTrack> {
+  std::vector<colmap::CameraTrack> cameras;
+  if (controller_->NumReconstructions() >= 1) {
+    const auto& cams = controller_->Cameras(id);
+    for (const auto& [_, c] : cams) {
+      cameras.push_back(
+          {c.camera_id, (int)c.model_id, c.width, c.height, c.params});
+    }
+  }
+  return cameras;
+}
+
+auto ColmapSparseReconstruct::getImageTracks(int id) const
+    -> std::vector<colmap::ImageTrack> {
+    std::vector<colmap::ImageTrack> imgIds;
+    if (controller_->NumReconstructions() >= 1) {
+      const auto& imgs = controller_->Images(id);
+      for (const auto& [_, img] : imgs) {
+        imgIds.push_back({img.ImageId(), img.Name(), img.CameraId()});
+        const auto& camfromWorld = img.CamFromWorld();
+        float rotx = camfromWorld.rotation.x();
+        float roty = camfromWorld.rotation.y();
+        float rotz = camfromWorld.rotation.z();
+        float rotw = camfromWorld.rotation.w();
+        float tx = camfromWorld.translation.x();
+        float ty = camfromWorld.translation.y();
+        float tz = camfromWorld.translation.z();
+        imgIds.back().rotation = {rotx, roty,rotz,rotw};
+        imgIds.back().translation = {tx,ty,tz};
+      }
+    }
+    return imgIds;
 }
 
 int ColmapSparseReconstruct::GetSparseReconstructPhase()

@@ -35,12 +35,19 @@
 namespace colmap {
     class SparseReconstructionController;
 }
+#ifndef COLMAP_SPARSEPOINT
+#define COLMAP_SPARSEPOINT
 
 namespace colmap{
     
     template<typename T>
     struct vec3 {
         T x,y,z;
+    };
+
+    template <typename T>
+    struct vec4 {
+      T x, y, z,w;
     };
 
     struct SparsePoint{
@@ -54,7 +61,16 @@ namespace colmap{
         size_t height = 0;
         std::vector<double> params;
     };
+
+    struct ImageTrack {
+      uint32_t image_id;
+      std::string name;
+      uint32_t camera_id;
+      vec4<float> rotation;
+      vec3<float>  translation;
+    };
 }
+#endif
 
 struct COLMAP_API ColmapSparseReconstruct {
     ~ColmapSparseReconstruct();
@@ -76,8 +92,11 @@ struct COLMAP_API ColmapSparseReconstruct {
     int GetSparseReconstructPhase();
     float GetProgressOnCurrentPhase();
     auto run()->bool;
-
-    std::vector<colmap::SparsePoint>   points;
-    std::vector<colmap::CameraTrack>    cameras;  
+    auto getPoints3D(int id) const -> std::vector<colmap::SparsePoint>;
+    auto getCameraTracks(int id) const -> std::vector<
+        colmap::CameraTrack>;
+    auto getImageTracks(int id) const -> std::vector<colmap::ImageTrack>;
+    //std::vector<colmap::SparsePoint>   points;
+    //std::vector<colmap::CameraTrack>    cameras;  
     std::shared_ptr<colmap::SparseReconstructionController>  controller_;
 };
