@@ -66,6 +66,7 @@ void EstimateRelativePoses(ViewGraph& view_graph,
       image_pair.cam2_from_cam1.translation = pose_rel_calc.t;
     }
   }
+  progress = 0.9f;
   std::cout << "\r Estimating relative pose: 100%" << std::endl;
   LOG(INFO) << "Estimating relative pose done";
 }

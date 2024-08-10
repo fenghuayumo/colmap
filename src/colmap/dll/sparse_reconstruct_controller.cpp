@@ -131,10 +131,10 @@ float SparseReconstructionController::GetProgressOnCurrentPhase() {
     return exhaustive_matcher_->GetProgress();
   } else if (status_phase == 3) {
     if (options_.use_glomapper)
-      return global_mapper->GetProgress();
+      return global_mapper ? global_mapper->GetProgress() : 0.0f;
     if(!options_.use_hierachy)
-        return incremental_mapper->GetProgress();
-    return hierarchical_mapper->GetProgress();
+      return incremental_mapper ? incremental_mapper->GetProgress() : 0.0f;
+    return hierarchical_mapper ? hierarchical_mapper->GetProgress() : 0.0f;
   }
   return 1.0f;
 }
@@ -225,10 +225,9 @@ void SparseReconstructionController::RunSparseMapper() {
     std::cout << "glomap mapper start\n";
     // glomap::GlobalMapper global_mapper(glomapOptions);
     global_mapper = std::make_shared<glomap::GlobalMapper>(glomapOptions);
-    std::thread t([&](){
-       global_mapper->Solve(database, view_graph, cameras, images, tracks);
-    });
-    t.join();
+
+    global_mapper->Solve(database, view_graph, cameras, images, tracks);
+
     if (options_.output_sparse_points) {
       WriteGlomapReconstruction(sparse_path,
                                 cameras,
