@@ -55,7 +55,7 @@ auto ColmapSparseReconstruct::getPoints3D(int id) const
       colmap::SparsePoint pt;
       pt.xyz = colmap::vec3<float>{(float)p.xyz(0), (float)p.xyz(1), (float)p.xyz(2)};
       pt.color =
-          colmap::vec3<unsigned char>{p.color(0), p.color(1), p.color(2)};
+          colmap::vec4<unsigned char>{p.color(0), p.color(1), p.color(2),0};
       points.push_back(pt);
     }
   }
@@ -65,7 +65,7 @@ auto ColmapSparseReconstruct::getPoints3D(int id) const
       colmap::SparsePoint pt;
       pt.xyz = colmap::vec3<float>{(float)p.xyz(0), (float)p.xyz(1), (float)p.xyz(2)};
       pt.color =
-          colmap::vec3<unsigned char>{p.color(0), p.color(1), p.color(2)};
+          colmap::vec4<unsigned char>{p.color(0), p.color(1), p.color(2),0};
       points.push_back(pt);
     }
   }
