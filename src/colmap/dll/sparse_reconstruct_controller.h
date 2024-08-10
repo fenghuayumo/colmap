@@ -95,6 +95,7 @@ class SparseReconstructionController : public Thread {
 
   std::shared_ptr<class IncrementalMapperController> incremental_mapper;
   std::shared_ptr<class HierarchicalMapperController> hierarchical_mapper;
+  std::shared_ptr<glomap::GlobalMapper>         global_mapper;
 };
 
 }  // namespace colmap

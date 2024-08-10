@@ -130,6 +130,8 @@ float SparseReconstructionController::GetProgressOnCurrentPhase() {
   } else if (status_phase == 2) {
     return exhaustive_matcher_->GetProgress();
   } else if (status_phase == 3) {
+    if (options_.use_glomapper)
+      return global_mapper->GetProgress();
     if(!options_.use_hierachy)
         return incremental_mapper->GetProgress();
     return hierarchical_mapper->GetProgress();
@@ -221,9 +223,13 @@ void SparseReconstructionController::RunSparseMapper() {
     const colmap::Database database(*option_manager_.database_path);
     glomap::ConvertDatabaseToGlomap(database, view_graph, cameras, images);
     std::cout << "glomap mapper start\n";
-    glomap::GlobalMapper global_mapper(glomapOptions);
-    global_mapper.Solve(database, view_graph, cameras, images, tracks);
-    if( options_.output_sparse_points ){
+    // glomap::GlobalMapper global_mapper(glomapOptions);
+    global_mapper = std::make_shared<glomap::GlobalMapper>(glomapOptions);
+    std::thread t([&](){
+       global_mapper->Solve(database, view_graph, cameras, images, tracks);
+    });
+    t.join();
+    if (options_.output_sparse_points) {
       WriteGlomapReconstruction(sparse_path,
                                 cameras,
                                 images,
@@ -232,6 +238,7 @@ void SparseReconstructionController::RunSparseMapper() {
                                 *option_manager_.image_path);
       LOG(INFO) << "Export to COLMAP reconstruction done";
     }
+    return;
   }
   else if(options_.use_hierachy)
   { 

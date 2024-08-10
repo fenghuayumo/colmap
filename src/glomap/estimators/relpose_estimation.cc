@@ -6,6 +6,7 @@ namespace glomap {
 void EstimateRelativePoses(ViewGraph& view_graph,
                            std::unordered_map<camera_t, Camera>& cameras,
                            std::unordered_map<image_t, Image>& images,
+                           float& progress,
                            const RelativePoseEstimationOptions& options) {
   std::vector<image_pair_t> image_pair_ids;
   for (auto& [image_pair_id, image_pair] : view_graph.image_pairs) {
@@ -19,6 +20,7 @@ void EstimateRelativePoses(ViewGraph& view_graph,
   for (image_pair_t chunks = 0; chunks < 10; chunks++) {
     std::cout << "\r Estimating relative pose: " << chunks * 10 << "%"
               << std::flush;
+    progress = (chunks * 10) / 120.0f;
     image_pair_t start = chunks * inverval;
     image_pair_t end = std::min((chunks + 1) * inverval, image_pair_ids.size());
 #pragma omp parallel for

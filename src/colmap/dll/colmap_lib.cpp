@@ -53,9 +53,9 @@ auto ColmapSparseReconstruct::getPoints3D(int id) const
   if (option.use_glomap) {
     for (const auto& [_, p] : controller_->tracks) {
       colmap::SparsePoint pt;
-      pt.xyz = colmap::vec3<float>{(float)p.xyz.x(), (float)p.xyz.y(), (float)p.xyz.z()};
+      pt.xyz = colmap::vec3<float>{(float)p.xyz(0), (float)p.xyz(1), (float)p.xyz(2)};
       pt.color =
-          colmap::vec3<unsigned char>{p.color.x(), p.color.y(), p.color.z()};
+          colmap::vec3<unsigned char>{p.color(0), p.color(1), p.color(2)};
       points.push_back(pt);
     }
   }
@@ -63,9 +63,9 @@ auto ColmapSparseReconstruct::getPoints3D(int id) const
     const auto& pts = controller_->Points3D(id);
     for (const auto& [_, p] : pts) {
       colmap::SparsePoint pt;
-      pt.xyz = colmap::vec3<float>{(float)p.xyz.x(), (float)p.xyz.y(), (float)p.xyz.z()};
+      pt.xyz = colmap::vec3<float>{(float)p.xyz(0), (float)p.xyz(1), (float)p.xyz(2)};
       pt.color =
-          colmap::vec3<unsigned char>{p.color.x(), p.color.y(), p.color.z()};
+          colmap::vec3<unsigned char>{p.color(0), p.color(1), p.color(2)};
       points.push_back(pt);
     }
   }

@@ -52,8 +52,10 @@ class GlobalMapper {
              std::unordered_map<image_t, Image>& images,
              std::unordered_map<track_t, Track>& tracks);
 
+  float GetProgress() { return progress_;}
  private:
   const GlobalMapperOptions options_;
+  float progress_ = 0.0f;
 };
 
 }  // namespace glomap
