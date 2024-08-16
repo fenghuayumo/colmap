@@ -40,7 +40,7 @@ class SparseReconstructionController : public Thread {
     bool single_camera_per_folder = false;
 
     // Which camera model to use for images.
-    std::string camera_model = "SIMPLE_RADIAL";
+    std::string camera_model = "SIMPLE_PINHOLE";
 
     // Initial camera params for all images.
     std::string camera_params;

@@ -47,13 +47,13 @@ SparseReconstructionController::SparseReconstructionController(
   THROW_CHECK(ExistsCameraModelWithName(options_.camera_model));
 
   if (options_.quality == Quality::LOW) {
-    option_manager_.ModifyForLowQuality();
+   option_manager_.ModifyForLowQuality();
   } else if (options_.quality == Quality::MEDIUM) {
-    option_manager_.ModifyForMediumQuality();
+   option_manager_.ModifyForMediumQuality();
   } else if (options_.quality == Quality::HIGH) {
-    option_manager_.ModifyForHighQuality();
+   option_manager_.ModifyForHighQuality();
   } else if (options_.quality == Quality::EXTREME) {
-    option_manager_.ModifyForExtremeQuality();
+   option_manager_.ModifyForExtremeQuality();
   }
 
   option_manager_.sift_extraction->num_threads = options_.num_threads;

@@ -75,7 +75,7 @@ namespace colmap{
 struct COLMAP_API ColmapSparseReconstruct {
     ~ColmapSparseReconstruct();
     enum class Quality {
-        Low,Medium,High
+        Low,Medium,High,Extreme
     };
     struct Option {
         std::string image_path;

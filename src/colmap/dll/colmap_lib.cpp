@@ -16,8 +16,10 @@ auto ColmapSparseReconstruct::run() ->bool
     }
     else if (option.quality == Quality::Medium) {
         _option.quality = colmap::SparseReconstructionController::Quality::MEDIUM;
-    }else
+    }else if (option.quality == Quality::High) {
         _option.quality = colmap::SparseReconstructionController::Quality::HIGH;
+    }else
+       _option.quality = colmap::SparseReconstructionController::Quality::EXTREME;
     _option.use_gpu = option.use_gpu;
     _option.gpu_index = std::to_string(option.gpu_index);
     _option.camera_model = option.camera_model;
