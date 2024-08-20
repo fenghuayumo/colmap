@@ -221,6 +221,7 @@ add_subdirectory(src/thirdparty)
 COLMAP_ADD_SOURCE_DIR(src/colmap/controllers CONTROLLERS_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/estimators ESTIMATORS_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/exe EXE_SRCS *.h *.cc)
+COLMAP_ADD_SOURCE_DIR(src/colmap/dll DLL_SRCS *.h *.cc *.cpp)
 COLMAP_ADD_SOURCE_DIR(src/colmap/feature FEATURE_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/geometry GEOMETRY_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/image IMAGE_SRCS *.h *.cc)
@@ -249,6 +250,7 @@ set(ALL_SRCS
     ${CONTROLLERS_SRCS}
     ${ESTIMATORS_SRCS}
     ${EXE_SRCS}
+    ${DLL_SRCS}
     ${FEATURE_SRCS}
     ${GEOMETRY_SRCS}
     ${IMAGE_SRCS}
@@ -316,6 +318,7 @@ set(COLMAP_EXPORT_LIBS
     colmap_controllers
     colmap_estimators
     colmap_exe
+    colmap_lib
     colmap_feature_types
     colmap_feature
     colmap_geometry
