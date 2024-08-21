@@ -51,7 +51,7 @@ SparseReconstructionController::SparseReconstructionController(
   } else if (options_.quality == Quality::MEDIUM) {
    option_manager_.ModifyForMediumQuality();
   } else if (options_.quality == Quality::HIGH) {
-   option_manager_.ModifyForHighQuality();
+  //  option_manager_.ModifyForHighQuality();
   } else if (options_.quality == Quality::EXTREME) {
    option_manager_.ModifyForExtremeQuality();
   }
