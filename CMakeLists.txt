@@ -1,32 +1,3 @@
-# Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#     * Redistributions of source code must retain the above copyright
-#       notice, this list of conditions and the following disclaimer.
-#
-#     * Redistributions in binary form must reproduce the above copyright
-#       notice, this list of conditions and the following disclaimer in the
-#       documentation and/or other materials provided with the distribution.
-#
-#     * Neither the name of ETH Zurich and UNC Chapel Hill nor the names of
-#       its contributors may be used to endorse or promote products derived
-#       from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-
 
 cmake_minimum_required(VERSION 3.10)
 
@@ -38,15 +9,13 @@ option(SIMD_ENABLED "Whether to enable SIMD optimizations" ON)
 option(OPENMP_ENABLED "Whether to enable OpenMP parallelization" ON)
 option(IPO_ENABLED "Whether to enable interprocedural optimization" ON)
 option(CUDA_ENABLED "Whether to enable CUDA, if available" ON)
-option(GUI_ENABLED "Whether to enable the graphical UI" ON)
+option(GUI_ENABLED "Whether to enable the graphical UI" OFF)
 option(OPENGL_ENABLED "Whether to enable OpenGL, if available" ON)
 option(TESTS_ENABLED "Whether to build test binaries" OFF)
 option(ASAN_ENABLED "Whether to enable AddressSanitizer flags" OFF)
 option(PROFILING_ENABLED "Whether to enable google-perftools linker flags" OFF)
 option(CCACHE_ENABLED "Whether to enable compiler caching, if available" ON)
 option(CGAL_ENABLED "Whether to enable the CGAL library" ON)
-option(LSD_ENABLED "Whether to enable the LSD library" ON)
-option(UNINSTALL_ENABLED "Whether to create a target to 'uninstall' colmap" ON)
 
 # Propagate options to vcpkg manifest.
 if(TESTS_ENABLED)
@@ -63,22 +32,16 @@ if(CGAL_ENABLED)
     list(APPEND VCPKG_MANIFEST_FEATURES "cgal")
 endif()
 
-if(LSD_ENABLED)
-    message(STATUS "Enabling LSD support")
-    add_definitions("-DCOLMAP_LSD_ENABLED")
-else()
-    message(STATUS "Disabling LSD support")
-endif()
-
 project(COLMAP LANGUAGES C CXX)
 
-set(COLMAP_VERSION "3.11.0.dev0")
+set(COLMAP_VERSION "3.10-dev")
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-
+set(OPENGL_gl_LIBRARY "/opt/nvidia/nsight-compute/2024.1.1/host/linux-desktop-glibc_2_11_3-x64/Mesa/libGL.so")
+set(OPENGL_glx_LIBRARY "/usr/lib/x86_64-linux-gnu/libGLX.so")
 set_property(GLOBAL PROPERTY GLOBAL_DEPENDS_NO_CYCLES ON)
 
 ################################################################################
@@ -127,7 +90,6 @@ endif()
 
 if(IS_MSVC)
     # Some fixes for the Glog library.
-    add_definitions("-DGLOG_USE_GLOG_EXPORT")
     add_definitions("-DGLOG_NO_ABBREVIATED_SEVERITIES")
     add_definitions("-DGL_GLEXT_PROTOTYPES")
     add_definitions("-DNOMINMAX")
@@ -213,7 +175,7 @@ link_directories(${COLMAP_LINK_DIRS})
 
 add_subdirectory(src/colmap)
 add_subdirectory(src/thirdparty)
-
+add_subdirectory(src/glomap)
 ################################################################################
 # Generate source groups for Visual Studio, XCode, etc.
 ################################################################################
@@ -236,17 +198,17 @@ COLMAP_ADD_SOURCE_DIR(src/colmap/tools TOOLS_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/ui UI_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/util UTIL_SRCS *.h *.cc)
 
-if(LSD_ENABLED)
-    COLMAP_ADD_SOURCE_DIR(src/thirdparty/LSD THIRDPARTY_LSD_SRCS *.h *.c)
-endif()
+COLMAP_ADD_SOURCE_DIR(src/thirdparty/LSD THIRDPARTY_LSD_SRCS *.h *.c)
 COLMAP_ADD_SOURCE_DIR(src/thirdparty/PoissonRecon THIRDPARTY_POISSON_RECON_SRCS *.h *.cpp *.inl)
 COLMAP_ADD_SOURCE_DIR(src/thirdparty/SiftGPU THIRDPARTY_SIFT_GPU_SRCS *.h *.cpp *.cu)
 COLMAP_ADD_SOURCE_DIR(src/thirdparty/VLFeat THIRDPARTY_VLFEAT_SRCS *.h *.c *.tc)
-
+COLMAP_ADD_SOURCE_DIR(src/thirdparty/PoseLib/PoseLib THIRDPARTY_POSELIB_SRCS *.h *.c *.tc)
+COLMAP_ADD_SOURCE_DIR(src/glomap GLOMAP_SRCS *.h *.c *.tc)
 # Add all of the source files to a regular library target, as using a custom
 # target does not allow us to set its C++ include directories (and thus
 # intellisense can't find any of the included files).
-set(ALL_SRCS
+add_library(
+    ${COLMAP_SRC_ROOT_FOLDER}
     ${CONTROLLERS_SRCS}
     ${ESTIMATORS_SRCS}
     ${EXE_SRCS}
@@ -264,20 +226,12 @@ set(ALL_SRCS
     ${TOOLS_SRCS}
     ${UI_SRCS}
     ${UTIL_SRCS}
+    ${THIRDPARTY_LSD_SRCS}
     ${THIRDPARTY_POISSON_RECON_SRCS}
     ${THIRDPARTY_SIFT_GPU_SRCS}
     ${THIRDPARTY_VLFEAT_SRCS}
-)
-
-if(LSD_ENABLED)
-    list(APPEND ALL_SRCS
-        ${THIRDPARTY_LSD_SRCS}
-    )
-endif()
-
-add_library(
-    ${COLMAP_SRC_ROOT_FOLDER}
-    ${ALL_SRCS}
+    ${THIRDPARTY_POSELIB_SRCS}
+    ${GLOMAP_SRCS}
 )
 
 # Prevent the library from being compiled automatically.
@@ -305,13 +259,11 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Configure the uninstallation script.
-if(UNINSTALL_ENABLED)
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeUninstall.cmake.in"
-                   "${CMAKE_CURRENT_BINARY_DIR}/CMakeUninstall.cmake"
-                   IMMEDIATE @ONLY)
-    add_custom_target(uninstall COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/CMakeUninstall.cmake)
-    set_target_properties(uninstall PROPERTIES FOLDER ${CMAKE_TARGETS_ROOT_FOLDER})
-endif()
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeUninstall.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/CMakeUninstall.cmake"
+               IMMEDIATE @ONLY)
+add_custom_target(uninstall COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/CMakeUninstall.cmake)
+set_target_properties(uninstall PROPERTIES FOLDER ${CMAKE_TARGETS_ROOT_FOLDER})
 
 set(COLMAP_EXPORT_LIBS
     # Internal.
@@ -332,15 +284,12 @@ set(COLMAP_EXPORT_LIBS
     colmap_sfm
     colmap_util
     # Third-party.
+    colmap_lsd
     colmap_poisson_recon
     colmap_vlfeat
+    PoseLib
+    glomap
 )
-if(LSD_ENABLED)
-    list(APPEND COLMAP_EXPORT_LIBS
-         # Third-party.
-         colmap_lsd
-    )
-endif()
 if(GUI_ENABLED)
     list(APPEND COLMAP_EXPORT_LIBS
          colmap_ui
@@ -363,10 +312,7 @@ add_library(colmap INTERFACE)
 target_link_libraries(colmap INTERFACE ${COLMAP_EXPORT_LIBS})
 set(INSTALL_INCLUDE_DIR "${CMAKE_INSTALL_PREFIX}/include")
 target_include_directories(
-    colmap
-    INTERFACE
-        $<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
+    colmap INTERFACE $<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>)
 
 install(
     TARGETS colmap ${COLMAP_EXPORT_LIBS}

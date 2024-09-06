@@ -18,7 +18,8 @@ endif()
 #     )
 # endif()
 # add_definitions("-DCOLMAP_BUILD_MAIN_LIB", "-DCOLMAP_BUILD_SHARED_LIBS")
-
+find_package(SuiteSparse REQUIRED)
+include_directories(${SuiteSparse_INCLUDE_DIRS}  "../../thirdparty/PoseLib/") 
 COLMAP_ADD_DLL(
     NAME colmap_lib
     SRCS
@@ -30,6 +31,7 @@ COLMAP_ADD_DLL(
         colmap_optim
         colmap_scene
         colmap_util
+        glomap
         # colmap_mvs
         ${OPTIONAL_LIBS}
     PRIVATE_LINK_LIBS

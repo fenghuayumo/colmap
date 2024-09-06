@@ -107,7 +107,14 @@ set(HEADERS_PUBLIC
 set(HEADERS_PRIVATE )
 
 # library configuration
-include(${PROJECT_SOURCE_DIR}/cmake/LibraryConfig.cmake)
+# include(${PROJECT_SOURCE_DIR}/cmake/LibraryConfig.cmake)
 
 # Eigen
-target_link_libraries(${LIBRARY_NAME} Eigen3::Eigen)
+# target_link_libraries(${LIBRARY_NAME} Eigen3::Eigen)
+# PUBLIC_LINK_LIBS  Eigen3::Eigen
+COLMAP_ADD_LIBRARY(
+    NAME PoseLib
+    PUBLIC_LINK_LIBS  
+        Eigen3::Eigen
+    SRCS ${SOURCES}
+)
