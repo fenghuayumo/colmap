@@ -17,6 +17,9 @@ OptionManager::OptionManager(bool add_project_options) {
   Reset();
 
   desc_->add_options()("help,h", "");
+
+  AddAndRegisterDefaultOption("log_to_stderr", &FLAGS_logtostderr);
+  AddAndRegisterDefaultOption("log_level", &FLAGS_v);
 }
 
 void OptionManager::AddAllOptions() {
@@ -161,7 +164,15 @@ void OptionManager::AddTrackEstablishmentOptions() {
   if (added_track_establishment_options_) {
     return;
   }
-  // TODO: maybe add options for track establishment
+  added_track_establishment_options_ = true;
+  AddAndRegisterDefaultOption("TrackEstablishment.min_num_tracks_per_view",
+                              &mapper->opt_track.min_num_tracks_per_view);
+  AddAndRegisterDefaultOption("TrackEstablishment.min_num_view_per_track",
+                              &mapper->opt_track.min_num_view_per_track);
+  AddAndRegisterDefaultOption("TrackEstablishment.max_num_view_per_track",
+                              &mapper->opt_track.max_num_view_per_track);
+  AddAndRegisterDefaultOption("TrackEstablishment.max_num_tracks",
+                              &mapper->opt_track.max_num_tracks);
 }
 
 void OptionManager::AddGlobalPositionerOptions() {
@@ -274,7 +285,8 @@ void OptionManager::Parse(const int argc, char** argv) {
     config::store(config::parse_command_line(argc, argv, *desc_), vmap);
 
     if (vmap.count("help")) {
-      LOG(ERROR) << "Options can be specified via command-line.\n" << *desc_;
+      std::cout << "The following options can be specified via command-line:\n"
+                << *desc_;
       // NOLINTNEXTLINE(concurrency-mt-unsafe)
       exit(EXIT_SUCCESS);
     }
