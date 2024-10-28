@@ -68,6 +68,7 @@ project "colmap"
         "COLMAP_BUILD_SHARED_LIBS",
         "PREMAKE_CUDA_EXPORT_API"
     }
+    openmp "On"
     buildcustomizations {cudaBuildCustomizations}
 
     if os.target() == "windows" then
