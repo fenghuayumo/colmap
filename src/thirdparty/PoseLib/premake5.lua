@@ -35,7 +35,7 @@ project "PoseLib"
         "GLOG_VERSION_MAJOR 1",
         "COLMAP_CUDA_ENABLED"
     }
-
+    openmp "On"
 --     buildcustomizations {cudaBuildCustomizations}
 
 --     if os.target() == "windows" then
