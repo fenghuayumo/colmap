@@ -224,7 +224,7 @@ void SparseReconstructionController::RunSparseMapper() {
     glomap::ConvertDatabaseToGlomap(database, view_graph, cameras, images);
     std::cout << "glomap mapper start\n";
     //glomapOptions.opt_gp.constraint_type = GlobalPositionerOptions::ONLY_POINTS;
-
+    glomapOptions.opt_track.max_num_tracks = 50000;
     global_mapper = std::make_shared<glomap::GlobalMapper>(glomapOptions);
   
     global_mapper->Solve(database, view_graph, cameras, images, tracks);
