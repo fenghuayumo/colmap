@@ -223,24 +223,18 @@ void SparseReconstructionController::RunSparseMapper() {
     const colmap::Database database(*option_manager_.database_path);
     glomap::ConvertDatabaseToGlomap(database, view_graph, cameras, images);
     std::cout << "glomap mapper start\n";
-    // glomap::GlobalMapper global_mapper(glomapOptions);
+    //glomapOptions.opt_gp.constraint_type = GlobalPositionerOptions::ONLY_POINTS;
+
     global_mapper = std::make_shared<glomap::GlobalMapper>(glomapOptions);
-
+  
     global_mapper->Solve(database, view_graph, cameras, images, tracks);
-
-    if (options_.output_sparse_points) {
-      reconstruction_manager_->Add();
-      auto id = reconstruction_manager_->Size() - 1;
-      WriteGlomapReconstruction(sparse_path,
+    ConvertGlomapToColmapReconstructionManager(
+                                reconstruction_manager_,
                                 cameras,
                                 images,
                                 tracks,
-                                *reconstruction_manager_->Get(id),
-                                "bin",
                                 *option_manager_.image_path);
-      LOG(INFO) << "Export to COLMAP reconstruction done";
-    }
-    return;
+    LOG(INFO) << "Export to COLMAP reconstruction done";
   }
   else if(options_.use_hierachy)
   { 

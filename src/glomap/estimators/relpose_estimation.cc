@@ -28,7 +28,7 @@ void EstimateRelativePoses(ViewGraph& view_graph,
   for (int64_t chunk_id = 0; chunk_id < kNumChunks; chunk_id++) {
     std::cout << "\r Estimating relative pose: " << chunk_id * kNumChunks << "%"
               << std::flush;
-    progress = (chunk_id * kNumChunks) / ((kNumChunks + 2 ) * kNumChunks);
+    progress = (chunk_id * kNumChunks) / static_cast<float>((kNumChunks + 1 ) * kNumChunks);
     const int64_t start = chunk_id * interval;
     const int64_t end =
         std::min<int64_t>((chunk_id + 1) * interval, num_image_pairs);

@@ -1,15 +1,57 @@
 #include "glomap/io/colmap_io.h"
-
+#include <colmap/scene/reconstruction_manager.h>
 #include <colmap/util/misc.h>
 
 namespace glomap {
+
+void ConvertGlomapToColmapReconstructionManager(
+    std::shared_ptr<colmap::ReconstructionManager>& reconstruction_manager,
+    const std::unordered_map<camera_t, Camera>& cameras,
+    const std::unordered_map<image_t, Image>& images,
+    const std::unordered_map<track_t, Track>& tracks,
+    const std::string image_path) {
+  // Check whether reconstruction pruning is applied.
+  // If so, export seperate reconstruction
+  int largest_component_num = -1;
+  for (const auto& [image_id, image] : images) {
+    if (image.cluster_id > largest_component_num)
+      largest_component_num = image.cluster_id;
+  }
+  // If it is not seperated into several clusters, then output them as whole
+  if (largest_component_num == -1) {
+    reconstruction_manager->Add();
+    auto id = reconstruction_manager->Size() - 1;
+    auto& reconstruction = *reconstruction_manager->Get(
+        id);
+    ConvertGlomapToColmap(cameras, images, tracks, reconstruction);
+    // Read in colors
+    if (image_path != "") {
+      LOG(INFO) << "Extracting colors ...";
+      reconstruction.ExtractColorsForAllImages(image_path);
+    }
+  } else {
+    for (int comp = 0; comp <= largest_component_num; comp++) {
+      std::cout << "\r Exporting reconstruction " << comp + 1 << " / "
+                << largest_component_num + 1 << std::flush;
+      reconstruction_manager->Add();
+      auto id = reconstruction_manager->Size() - 1;
+      auto& reconstruction = *reconstruction_manager->Get(id);
+      ConvertGlomapToColmap(cameras, images, tracks, reconstruction, comp);
+      // Read in colors
+      if (image_path != "") {
+        reconstruction.ExtractColorsForAllImages(image_path);
+      }
+    }
+    std::cout << std::endl;
+  }
+}
+
 
 void WriteGlomapReconstruction(
     const std::string& reconstruction_path,
     const std::unordered_map<camera_t, Camera>& cameras,
     const std::unordered_map<image_t, Image>& images,
     const std::unordered_map<track_t, Track>& tracks,
-    colmap::Reconstruction& reconstruction,
     const std::string output_format,
     const std::string image_path) {
   // Check whether reconstruction pruning is applied.
@@ -21,7 +63,7 @@ void WriteGlomapReconstruction(
   }
   // If it is not seperated into several clusters, then output them as whole
   if (largest_component_num == -1) {
-    // colmap::Reconstruction reconstruction;
+    colmap::Reconstruction reconstruction;
     ConvertGlomapToColmap(cameras, images, tracks, reconstruction);
     // Read in colors
     if (image_path != "") {
@@ -40,7 +82,7 @@ void WriteGlomapReconstruction(
     for (int comp = 0; comp <= largest_component_num; comp++) {
       std::cout << "\r Exporting reconstruction " << comp + 1 << " / "
                 << largest_component_num + 1 << std::flush;
-      // colmap::Reconstruction reconstruction;
+      colmap::Reconstruction reconstruction;
       ConvertGlomapToColmap(cameras, images, tracks, reconstruction, comp);
       // Read in colors
       if (image_path != "") {
