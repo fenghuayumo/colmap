@@ -10,6 +10,7 @@ void WriteGlomapReconstruction(
     const std::unordered_map<camera_t, Camera>& cameras,
     const std::unordered_map<image_t, Image>& images,
     const std::unordered_map<track_t, Track>& tracks,
+    colmap::Reconstruction& reconstruction,
     const std::string output_format = "bin",
     const std::string image_path = "");
 
