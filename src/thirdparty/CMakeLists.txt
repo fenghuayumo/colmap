@@ -1,4 +1,4 @@
-set(FOLDER_NAME "lib")
+set(FOLDER_NAME "thirdparty")
 
 # Only show moderate warnings for external library code.
 if(IS_MSVC)
@@ -45,5 +45,4 @@ if(GPU_ENABLED)
     add_subdirectory(SiftGPU)
 endif()
 add_subdirectory(VLFeat)
-add_subdirectory(PoseLib)
 set(CLANG_TIDY_EXE ${CLANG_TIDY_EXE_TEMP})

@@ -27,56 +27,42 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#pragma once
+#include "colmap/mvs/mat.h"
 
-#include "colmap/controllers/incremental_mapper.h"
-#include "colmap/scene/reconstruction_manager.h"
-#include "colmap/scene/scene_clustering.h"
-#include "colmap/util/base_controller.h"
+#include "colmap/util/file.h"
 
-#include <memory>
+#include <fstream>
+#include <string>
+#include <vector>
 
 namespace colmap {
+namespace mvs {
 
-// Hierarchical mapping first hierarchically partitions the scene into multiple
-// overlapping clusters, then reconstructs them separately using incremental
-// mapping, and finally merges them all into a globally consistent
-// reconstruction. This is especially useful for larger-scale scenes, since
-// incremental mapping becomes slow with an increasing number of images.
-class HierarchicalMapperController : public BaseController {
- public:
-  struct Options {
-    // The path to the image folder which are used as input.
-    std::string image_path;
+template <>
+void Mat<float>::Read(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  THROW_CHECK_FILE_OPEN(file, path);
 
-    // The path to the database file which is used as input.
-    std::string database_path;
+  char unused_char;
+  file >> width_ >> unused_char >> height_ >> unused_char >> depth_ >>
+      unused_char;
+  THROW_CHECK_GT(width_, 0) << path;
+  THROW_CHECK_GT(height_, 0) << path;
+  THROW_CHECK_GT(depth_, 0) << path;
+  data_.resize(width_ * height_ * depth_);
 
-    // The maximum number of trials to initialize a cluster.
-    int init_num_trials = 10;
+  ReadBinaryLittleEndian<float>(&file, &data_);
+  file.close();
+}
 
-    // The number of workers used to reconstruct clusters in parallel.
-    int num_workers = -1;
+template <>
+void Mat<float>::Write(const std::string& path) const {
+  std::ofstream file(path, std::ios::binary);
+  THROW_CHECK_FILE_OPEN(file, path);
+  file << width_ << "&" << height_ << "&" << depth_ << "&";
+  WriteBinaryLittleEndian<float>(&file, data_);
+  file.close();
+}
 
-    // Options for clustering the scene graph.
-    SceneClustering::Options clustering_options;
-
-    // Options used to reconstruction each cluster individually.
-    IncrementalMapperOptions incremental_options;
-
-    bool Check() const;
-  };
-
-  HierarchicalMapperController(
-      const Options& options,
-      std::shared_ptr<ReconstructionManager> reconstruction_manager);
-
-  void Run() override;
-  float GetProgress();
-  std::vector<std::shared_ptr<class IncrementalMapperController>> mappers;
- private:
-  const Options options_;
-  std::shared_ptr<ReconstructionManager> reconstruction_manager_;
-};
-
+}  // namespace mvs
 }  // namespace colmap

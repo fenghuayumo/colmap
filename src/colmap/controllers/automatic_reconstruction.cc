@@ -32,7 +32,6 @@
 #include "colmap/controllers/feature_extraction.h"
 #include "colmap/controllers/feature_matching.h"
 #include "colmap/controllers/incremental_mapper.h"
-#include "colmap/controllers/hierarchical_mapper.h"
 #include "colmap/controllers/option_manager.h"
 #include "colmap/image/undistortion.h"
 #include "colmap/mvs/fusion.h"
@@ -101,10 +100,14 @@ AutomaticReconstructionController::AutomaticReconstructionController(
 
   option_manager_.sift_extraction->use_gpu = options_.use_gpu;
   option_manager_.sift_matching->use_gpu = options_.use_gpu;
+  option_manager_.mapper->ba_use_gpu = options_.use_gpu;
+  option_manager_.bundle_adjustment->use_gpu = options_.use_gpu;
 
   option_manager_.sift_extraction->gpu_index = options_.gpu_index;
   option_manager_.sift_matching->gpu_index = options_.gpu_index;
   option_manager_.patch_match_stereo->gpu_index = options_.gpu_index;
+  option_manager_.mapper->ba_gpu_index = options_.gpu_index;
+  option_manager_.bundle_adjustment->gpu_index = options_.gpu_index;
 
   feature_extractor_ = CreateFeatureExtractorController(
       reader_options, *option_manager_.sift_extraction);
@@ -166,13 +169,13 @@ void AutomaticReconstructionController::Run() {
   if (IsStopped()) {
     return;
   }
-  status_phase = 1;
+
   RunFeatureExtraction();
 
   if (IsStopped()) {
     return;
   }
-  status_phase = 2;
+
   RunFeatureMatching();
 
   if (IsStopped()) {
@@ -241,27 +244,12 @@ void AutomaticReconstructionController::RunSparseMapper() {
     }
   }
 
-  incremental_mapper = std::make_shared<IncrementalMapperController>(option_manager_.mapper,
+  IncrementalMapperController mapper(option_manager_.mapper,
                                      *option_manager_.image_path,
                                      *option_manager_.database_path,
                                      reconstruction_manager_);
-  HierarchicalMapperController::Options mapper_options;
-  mapper_options.database_path = *option_manager_.database_path;
-  mapper_options.image_path = *option_manager_.image_path;
-  mapper_options.incremental_options = *option_manager_.mapper;
-  hierarchical_mapper = std::make_shared<HierarchicalMapperController>(mapper_options, reconstruction_manager_);
-
-  status_phase = 3;
-  if(!options_.use_hierachy)
-  { 
-      incremental_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
-      incremental_mapper->Run();
-  }
-  else
-  {
-      hierarchical_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
-      hierarchical_mapper->Run();
-  }
+  mapper.SetCheckIfStoppedFunc([&]() { return IsStopped(); });
+  mapper.Run();
 
   CreateDirIfNotExists(sparse_path);
   reconstruction_manager_->Write(sparse_path);
@@ -343,7 +331,8 @@ void AutomaticReconstructionController::RunDenseMapper() {
           dense_path,
           "COLMAP",
           "",
-          options_.quality == Quality::HIGH ? "geometric" : "photometric");
+          option_manager_.patch_match_stereo->geom_consistency ? "geometric"
+                                                               : "photometric");
       fuser.SetCheckIfStoppedFunc([&]() { return IsStopped(); });
       fuser.Run();
 

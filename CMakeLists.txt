@@ -16,6 +16,8 @@ option(ASAN_ENABLED "Whether to enable AddressSanitizer flags" OFF)
 option(PROFILING_ENABLED "Whether to enable google-perftools linker flags" OFF)
 option(CCACHE_ENABLED "Whether to enable compiler caching, if available" ON)
 option(CGAL_ENABLED "Whether to enable the CGAL library" ON)
+option(LSD_ENABLED "Whether to enable the LSD library" ON)
+option(UNINSTALL_ENABLED "Whether to create a target to 'uninstall' colmap" ON)
 
 # Propagate options to vcpkg manifest.
 if(TESTS_ENABLED)
@@ -34,7 +36,7 @@ endif()
 
 project(COLMAP LANGUAGES C CXX)
 
-set(COLMAP_VERSION "3.10-dev")
+set(COLMAP_VERSION "3.11.0.dev0")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -113,6 +115,11 @@ if(IS_GNU)
     # Hide incorrect warnings for uninitialized Eigen variables under GCC.
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-maybe-uninitialized")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-maybe-uninitialized")
+endif()
+
+if(IS_MACOS)
+    # Mitigate CMake limitation, see: https://discourse.cmake.org/t/avoid-duplicate-linking-to-avoid-xcode-15-warnings/9084/10
+    add_link_options(LINKER:-no_warn_duplicate_libraries)
 endif()
 
 if(IS_DEBUG)
@@ -207,12 +214,10 @@ COLMAP_ADD_SOURCE_DIR(src/glomap GLOMAP_SRCS *.h *.c *.tc)
 # Add all of the source files to a regular library target, as using a custom
 # target does not allow us to set its C++ include directories (and thus
 # intellisense can't find any of the included files).
-add_library(
-    ${COLMAP_SRC_ROOT_FOLDER}
+set(ALL_SRCS
     ${CONTROLLERS_SRCS}
     ${ESTIMATORS_SRCS}
     ${EXE_SRCS}
-    ${DLL_SRCS}
     ${FEATURE_SRCS}
     ${GEOMETRY_SRCS}
     ${IMAGE_SRCS}
@@ -226,20 +231,28 @@ add_library(
     ${TOOLS_SRCS}
     ${UI_SRCS}
     ${UTIL_SRCS}
-    ${THIRDPARTY_LSD_SRCS}
     ${THIRDPARTY_POISSON_RECON_SRCS}
     ${THIRDPARTY_SIFT_GPU_SRCS}
     ${THIRDPARTY_VLFEAT_SRCS}
-    ${THIRDPARTY_POSELIB_SRCS}
-    ${GLOMAP_SRCS}
 )
 
-# Prevent the library from being compiled automatically.
-set_target_properties(
-    ${COLMAP_SRC_ROOT_FOLDER} PROPERTIES
-    EXCLUDE_FROM_ALL 1
-    EXCLUDE_FROM_DEFAULT_BUILD 1)
+if(LSD_ENABLED)
+    list(APPEND ALL_SRCS
+        ${THIRDPARTY_LSD_SRCS}
+    )
+endif()
 
+add_library(
+    ${COLMAP_SRC_ROOT_FOLDER}
+    ${ALL_SRCS}
+)
+
+    # Prevent the library from being compiled automatically.
+    set_target_properties(
+        ${COLMAP_SRC_ROOT_FOLDER} PROPERTIES
+        EXCLUDE_FROM_ALL 1
+        EXCLUDE_FROM_DEFAULT_BUILD 1)
+endif()
 
 ################################################################################
 # Install and uninstall scripts
@@ -305,6 +318,9 @@ if(GPU_ENABLED)
     list(APPEND COLMAP_EXPORT_LIBS
          colmap_sift_gpu
     )
+endif()
+if(FETCH_POSELIB)
+    list(APPEND COLMAP_EXPORT_LIBS PoseLib)
 endif()
 
 # Add unified interface library target to export.
