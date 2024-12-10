@@ -2,8 +2,8 @@
 
 #include "colmap/controllers/feature_extraction.h"
 #include "colmap/controllers/feature_matching.h"
-#include "colmap/controllers/incremental_mapper.h"
-#include "colmap/controllers/hierarchical_mapper.h"
+#include "colmap/controllers/incremental_pipeline.h"
+#include "colmap/controllers/hierarchical_pipeline.h"
 #include "colmap/controllers/option_manager.h"
 #include "colmap/image/undistortion.h"
 #include "colmap/mvs/fusion.h"
@@ -238,17 +238,18 @@ void SparseReconstructionController::RunSparseMapper() {
   }
   else if(options_.use_hierachy)
   { 
-    HierarchicalMapperController::Options mapper_options;
+    HierarchicalPipeline::Options mapper_options;
     mapper_options.database_path = *option_manager_.database_path;
     mapper_options.image_path = *option_manager_.image_path;
     mapper_options.incremental_options = *option_manager_.mapper;
-    hierarchical_mapper = std::make_shared<HierarchicalMapperController>(mapper_options, reconstruction_manager_);
+    hierarchical_mapper = std::make_shared<HierarchicalPipeline>(
+        mapper_options, reconstruction_manager_);
     hierarchical_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
     hierarchical_mapper->Run();
   }
   else
   {
-    incremental_mapper = std::make_shared<IncrementalMapperController>(option_manager_.mapper,
+    incremental_mapper = std::make_shared<IncrementalPipeline>(option_manager_.mapper,
                                     *option_manager_.image_path,
                                     *option_manager_.database_path,
                                     reconstruction_manager_);

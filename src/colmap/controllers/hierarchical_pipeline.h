@@ -73,7 +73,7 @@ class HierarchicalPipeline : public BaseController {
 
   void Run() override;
   float GetProgress();
-  std::vector<std::shared_ptr<class IncrementalMapperController>> mappers;
+  std::vector<std::shared_ptr<class IncrementalPipeline>> mappers;
  private:
   const Options options_;
   std::shared_ptr<ReconstructionManager> reconstruction_manager_;

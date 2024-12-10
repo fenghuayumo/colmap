@@ -93,8 +93,8 @@ class SparseReconstructionController : public Thread {
   std::unique_ptr<Thread> sequential_matcher_;
   std::unique_ptr<Thread> vocab_tree_matcher_;
 
-  std::shared_ptr<class IncrementalMapperController> incremental_mapper;
-  std::shared_ptr<class HierarchicalMapperController> hierarchical_mapper;
+  std::shared_ptr<class IncrementalPipeline> incremental_mapper;
+  std::shared_ptr<class HierarchicalPipeline> hierarchical_mapper;
   std::shared_ptr<glomap::GlobalMapper>         global_mapper;
 };
 
