@@ -38,7 +38,7 @@ option(SIMD_ENABLED "Whether to enable SIMD optimizations" ON)
 option(OPENMP_ENABLED "Whether to enable OpenMP parallelization" ON)
 option(IPO_ENABLED "Whether to enable interprocedural optimization" ON)
 option(CUDA_ENABLED "Whether to enable CUDA, if available" ON)
-option(GUI_ENABLED "Whether to enable the graphical UI" ON)
+option(GUI_ENABLED "Whether to enable the graphical UI" OFF)
 option(OPENGL_ENABLED "Whether to enable OpenGL, if available" OFF)
 option(TESTS_ENABLED "Whether to build test binaries" OFF)
 option(ASAN_ENABLED "Whether to enable AddressSanitizer flags" OFF)
@@ -327,7 +327,6 @@ set(COLMAP_EXPORT_LIBS
     colmap_controllers
     colmap_estimators
     colmap_exe
-    colmap_dvs
     colmap_feature_types
     colmap_feature
     colmap_geometry
@@ -386,6 +385,7 @@ install(
     EXPORT colmap-targets
     LIBRARY DESTINATION thirdparty/)
 
+install(TARGETS colmap_dvs LIBRARY DESTINATION lib/)
 # Generate config and version.
 include(CMakePackageConfigHelpers)
 set(PACKAGE_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/colmap-config.cmake")
@@ -416,7 +416,10 @@ install(
     DIRECTORY src/thirdparty
     DESTINATION include/colmap
     FILES_MATCHING REGEX ".*[.]h|.*[.]hpp|.*[.]inl")
-
+install(
+    DIRECTORY src/glomap
+    DESTINATION include/glomap
+    FILES_MATCHING REGEX ".*[.]h|.*[.]hpp|.*[.]inl")
 # Install find_package scripts for dependencies.
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cmake

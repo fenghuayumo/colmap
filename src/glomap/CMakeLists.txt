@@ -80,7 +80,7 @@ if(GUI_ENABLED)
 endif()
 
 # find_package(SuiteSparse COMPONENTS CHOLMOD REQUIRED)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SuiteSparse_INCLUDE_DIRS}) 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SuiteSparse_CHOLMOD_INCLUDE_DIR})
 COLMAP_ADD_LIBRARY(
     NAME glomap
     SRCS ${SOURCES} ${HEADERS}

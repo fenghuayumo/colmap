@@ -14,8 +14,8 @@ find_package(Boost ${COLMAP_FIND_TYPE} COMPONENTS
              program_options
              system)
 
-find_package(Eigen3 ${COLMAP_FIND_TYPE})
-find_package(SuiteSparse COMPONENTS CHOLMOD REQUIRED)
+find_package(Eigen3 3.4 ${COLMAP_FIND_TYPE})
+# find_package(SuiteSparse COMPONENTS CHOLMOD REQUIRED)
 
 find_package(FreeImage ${COLMAP_FIND_TYPE})
 
@@ -49,7 +49,7 @@ if(NOT TARGET Ceres::ceres)
     target_link_libraries(
         Ceres::ceres INTERFACE ${CERES_LIBRARIES})
 endif()
-
+find_package(SuiteSparse COMPONENTS CHOLMOD REQUIRED)
 if(TESTS_ENABLED)
     find_package(GTest ${COLMAP_FIND_TYPE})
 endif()
