@@ -129,7 +129,7 @@ macro(COLMAP_ADD_DLL)
     target_link_libraries(${COLMAP_ADD_DLL_NAME}
         PRIVATE ${COLMAP_ADD_DLL_PRIVATE_LINK_LIBS}
         PUBLIC ${COLMAP_ADD_DLL_PUBLIC_LINK_LIBS})
-endmacro(COLMAP_ADD_LIBRARY)
+endmacro(COLMAP_ADD_DLL)
 # Wrapper for test executables.
 macro(COLMAP_ADD_TEST)
     set(options)

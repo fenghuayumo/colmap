@@ -1,5 +1,5 @@
 
-set(FOLDER_NAME "dll")
+set(FOLDER_NAME "colmap_dvs")
 
 if(IS_MSVC)
     add_compile_options("/bigobj")
@@ -18,12 +18,13 @@ endif()
 #     )
 # endif()
 # add_definitions("-DCOLMAP_BUILD_MAIN_LIB", "-DCOLMAP_BUILD_SHARED_LIBS")
-find_package(SuiteSparse REQUIRED)
-include_directories(${SuiteSparse_INCLUDE_DIRS}  "../../thirdparty/PoseLib/") 
+# find_package(SuiteSparse REQUIRED)
+include_directories(${SuiteSparse_INCLUDE_DIRS}) 
 COLMAP_ADD_DLL(
-    NAME colmap_lib
+    NAME colmap_dvs
     SRCS
     colmap_lib.h colmap_lib.cpp
+    sparse_reconstruct_controller.h sparse_reconstruct_controller.cpp
     PUBLIC_LINK_LIBS
         colmap_controllers
         colmap_estimators
@@ -32,7 +33,8 @@ COLMAP_ADD_DLL(
         colmap_scene
         colmap_util
         glomap
-        # colmap_mvs
+        PoseLib::PoseLib
+        SuiteSparse::CHOLMOD
         ${OPTIONAL_LIBS}
     PRIVATE_LINK_LIBS
         Boost::boost
@@ -60,4 +62,4 @@ COLMAP_ADD_DLL(
 #         ${OPTIONAL_LIBS}
 #         Boost::boost
 # )
-set_target_properties(colmap_lib PROPERTIES OUTPUT_NAME colmap_dll)
+set_target_properties(colmap_dvs PROPERTIES OUTPUT_NAME colmap_dvs)

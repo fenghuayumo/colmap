@@ -86,7 +86,7 @@ class FeatureMatcherThread : public Thread {
       timer.Start();
       const std::vector<std::pair<image_t, image_t>> image_pairs =
           pair_generator->Next();
-      progress_ = pair_generator.GetProgress();
+      //progress_ = pair_generator.GetProgress();
       std::unique_ptr<DatabaseTransaction> database_transaction;
       cache_->AccessDatabase([&database_transaction](Database& database) {
         database_transaction = std::make_unique<DatabaseTransaction>(&database);

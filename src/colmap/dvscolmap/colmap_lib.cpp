@@ -1,4 +1,4 @@
-#include "colmap/dll/colmap_lib.h"
+#include "colmap/dvscolmap/colmap_lib.h"
 
 #include "sparse_reconstruct_controller.h"
 #include "colmap/util/controller_thread.h"
