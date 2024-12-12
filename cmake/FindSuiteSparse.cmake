@@ -97,9 +97,9 @@ if (NOT SuiteSparse_NO_CMAKE)
   find_package (SuiteSparse NO_MODULE QUIET)
 endif (NOT SuiteSparse_NO_CMAKE)
 
-if (SuiteSparse_FOUND)
-  return ()
-endif (SuiteSparse_FOUND)
+# if (SuiteSparse_FOUND)
+#   return ()
+# endif (SuiteSparse_FOUND)
 
 # Push CMP0057 to enable support for IN_LIST, when cmake_minimum_required is
 # set to <3.3.
