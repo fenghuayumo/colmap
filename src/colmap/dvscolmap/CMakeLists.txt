@@ -17,7 +17,9 @@ endif()
 #         colmap_ui
 #     )
 # endif()
-# add_definitions("-DCOLMAP_BUILD_MAIN_LIB", "-DCOLMAP_BUILD_SHARED_LIBS")
+if(MSVC)
+   add_definitions("-DCOLMAP_BUILD_MAIN_LIB", "-DCOLMAP_BUILD_SHARED_LIBS")
+endif()
 # find_package(SuiteSparse REQUIRED)
 include_directories(${SuiteSparse_CHOLMOD_INCLUDE_DIR})
 COLMAP_ADD_DLL(

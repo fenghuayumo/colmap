@@ -1,5 +1,4 @@
-#include "colmap/dvscolmap/colmap_lib.h"
-
+#include "colmap_lib.h"
 #include "sparse_reconstruct_controller.h"
 #include "colmap/util/controller_thread.h"
 #include "colmap/controllers/incremental_pipeline.h"
