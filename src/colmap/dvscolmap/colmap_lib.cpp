@@ -148,3 +148,38 @@ float ColmapSparseReconstruct::GetProgressOnCurrentPhase()
   if (controller_ == nullptr) return 0;
   return controller_->GetProgressOnCurrentPhase();
 }
+
+auto ColmapSparseReconstruct::stop()->void {
+  if (controller_ == nullptr) return;
+  controller_->Stop();
+}
+
+auto ColmapSparseReconstruct::pause() -> void {
+  if (controller_ == nullptr) return;
+  controller_->Pause();
+}
+
+auto ColmapSparseReconstruct::resume() -> void {
+
+}
+
+auto ColmapSparseReconstruct::wait() -> void {
+
+}
+
+bool ColmapSparseReconstruct::isStopped() { 
+  if (!controller_) return false;
+  return controller_->IsStopped();
+}
+bool ColmapSparseReconstruct::isPaused() {
+  if (!controller_) return false;
+  return controller_->IsPaused();
+}
+bool ColmapSparseReconstruct::isRunning() {
+  if (!controller_) return false;
+  return controller_->IsRunning();
+}
+bool ColmapSparseReconstruct::isFinished() {
+  if (!controller_) return false;
+  return controller_->IsFinished();
+}

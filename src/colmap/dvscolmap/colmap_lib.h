@@ -80,6 +80,7 @@ struct COLMAP_API ColmapSparseReconstruct {
     struct Option {
         std::string image_path;
         std::string workspace_path;
+        std::string mask_path;
         int gpu_index = -1;
         bool video = true;
         bool use_hierachy = true;
@@ -88,6 +89,8 @@ struct COLMAP_API ColmapSparseReconstruct {
         std::string camera_model= "SIMPLE_PINHOLE";
         bool use_glomap = false;
         bool output_sparse_points = false;
+        bool single_camera = false;
+
     }option;
     int GetSparseReconstructPhase();
     float GetProgressOnCurrentPhase();
@@ -96,6 +99,14 @@ struct COLMAP_API ColmapSparseReconstruct {
     auto getCameraTracks(int id) const -> std::vector<
         colmap::CameraTrack>;
     auto getImageTracks(int id) const -> std::vector<colmap::ImageTrack>;
+    auto pause()->void;
+    auto stop()->void;
+    auto resume()->void;
+    auto wait()->void;
+    bool isStopped();
+    bool isPaused();
+    bool isRunning();
+    bool isFinished();
     //std::vector<colmap::SparsePoint>   points;
     //std::vector<colmap::CameraTrack>    cameras;  
     std::shared_ptr<colmap::SparseReconstructionController>  controller_;
