@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@
 #include "colmap/geometry/gps.h"
 #include "colmap/scene/database.h"
 #include "colmap/util/cuda.h"
+#include "colmap/util/file.h"
 #include "colmap/util/misc.h"
 #include "colmap/util/opengl_utils.h"
 #include "colmap/util/timer.h"
@@ -260,26 +261,9 @@ class FeatureWriterThread : public Thread {
         LOG(INFO) << StringPrintf("  Name:            %s",
                                   image_data.image.Name().c_str());
 
-        if (image_data.status == ImageReader::Status::IMAGE_EXISTS) {
-          LOG(INFO) << "  SKIP: Features for image already extracted.";
-        } else if (image_data.status == ImageReader::Status::BITMAP_ERROR) {
-          LOG(ERROR) << "Failed to read image file format.";
-        } else if (image_data.status ==
-                   ImageReader::Status::CAMERA_SINGLE_DIM_ERROR) {
-          LOG(ERROR) << "Single camera specified, "
-                        "but images have different dimensions.";
-        } else if (image_data.status ==
-                   ImageReader::Status::CAMERA_EXIST_DIM_ERROR) {
-          LOG(ERROR) << "Image previously processed, but current image "
-                        "has different dimensions.";
-        } else if (image_data.status ==
-                   ImageReader::Status::CAMERA_PARAM_ERROR) {
-          LOG(ERROR) << "Camera has invalid parameters.";
-        } else if (image_data.status == ImageReader::Status::FAILURE) {
-          LOG(ERROR) << "Failed to extract features.";
-        }
-
         if (image_data.status != ImageReader::Status::SUCCESS) {
+          LOG(ERROR) << image_data.image.Name() << " "
+                     << ImageReader::StatusToString(image_data.status);
           continue;
         }
 
@@ -295,6 +279,9 @@ class FeatureWriterThread : public Thread {
             image_data.camera.has_prior_focal_length ? " (Prior)" : "");
         LOG(INFO) << StringPrintf("  Features:        %d",
                                   image_data.keypoints.size());
+        if (image_data.mask.Data()) {
+          LOG(INFO) << "  Mask:            Yes";
+        }
 
         DatabaseTransaction database_transaction(database_);
 
@@ -345,13 +332,18 @@ class FeatureExtractorController : public Thread {
 
     std::shared_ptr<Bitmap> camera_mask;
     if (!reader_options_.camera_mask_path.empty()) {
-      camera_mask = std::make_shared<Bitmap>();
-      if (!camera_mask->Read(reader_options_.camera_mask_path,
-                             /*as_rgb*/ false)) {
-        LOG(ERROR) << "Cannot read camera mask file: "
-                   << reader_options_.camera_mask_path
-                   << ". No mask is going to be used.";
-        camera_mask.reset();
+      if (ExistsFile(reader_options_.camera_mask_path)) {
+        camera_mask = std::make_shared<Bitmap>();
+        if (!camera_mask->Read(reader_options_.camera_mask_path,
+                               /*as_rgb*/ false)) {
+          LOG(ERROR) << "Failed to read invalid mask file at: "
+                     << reader_options_.camera_mask_path
+                     << ". No mask is going to be used.";
+          camera_mask.reset();
+        }
+      } else {
+        LOG(ERROR) << "Mask at " << reader_options_.camera_mask_path
+                   << " does not exist.";
       }
     }
 

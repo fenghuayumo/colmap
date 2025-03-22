@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -34,6 +34,8 @@
 
 #include <clocale>
 
+static void InitUiResources() { Q_INIT_RESOURCE(resources); }
+
 namespace colmap {
 
 MainWindow::MainWindow(const OptionManager& options)
@@ -41,6 +43,8 @@ MainWindow::MainWindow(const OptionManager& options)
       reconstruction_manager_(std::make_shared<ReconstructionManager>()),
       thread_control_widget_(new ThreadControlWidget(this)),
       window_closed_(false) {
+  InitUiResources();
+
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
   std::setlocale(LC_NUMERIC, "C");
 
@@ -610,34 +614,31 @@ void MainWindow::CreateControllers() {
     mapper_controller_->Wait();
   }
 
-  mapper_controller_ =
-      std::make_unique<ControllerThread<IncrementalMapperController>>(
-          std::make_shared<IncrementalMapperController>(
-              options_.mapper,
-              *options_.image_path,
-              *options_.database_path,
-              reconstruction_manager_));
+  mapper_controller_ = std::make_unique<ControllerThread<IncrementalPipeline>>(
+      std::make_shared<IncrementalPipeline>(options_.mapper,
+                                            *options_.image_path,
+                                            *options_.database_path,
+                                            reconstruction_manager_));
   mapper_controller_->GetController()->AddCallback(
-      IncrementalMapperController::INITIAL_IMAGE_PAIR_REG_CALLBACK, [this]() {
+      IncrementalPipeline::INITIAL_IMAGE_PAIR_REG_CALLBACK, [this]() {
         if (!mapper_controller_->IsStopped()) {
           action_render_now_->trigger();
         }
       });
   mapper_controller_->GetController()->AddCallback(
-      IncrementalMapperController::NEXT_IMAGE_REG_CALLBACK, [this]() {
+      IncrementalPipeline::NEXT_IMAGE_REG_CALLBACK, [this]() {
         if (!mapper_controller_->IsStopped()) {
           action_render_->trigger();
         }
       });
   mapper_controller_->GetController()->AddCallback(
-      IncrementalMapperController::LAST_IMAGE_REG_CALLBACK, [this]() {
+      IncrementalPipeline::LAST_IMAGE_REG_CALLBACK, [this]() {
         if (!mapper_controller_->IsStopped()) {
           action_render_now_->trigger();
         }
       });
   mapper_controller_->AddCallback(
-      ControllerThread<IncrementalMapperController>::FINISHED_CALLBACK,
-      [this]() {
+      ControllerThread<IncrementalPipeline>::FINISHED_CALLBACK, [this]() {
         if (!mapper_controller_->IsStopped()) {
           action_render_now_->trigger();
           action_reconstruction_finish_->trigger();

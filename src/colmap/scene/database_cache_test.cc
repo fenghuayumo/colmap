@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,7 @@ TEST(DatabaseCache, Empty) {
   EXPECT_EQ(cache.NumImages(), 0);
 }
 
-TEST(DatabaseCache, Nominal) {
+TEST(DatabaseCache, ConstructFromDatabase) {
   Database database(Database::kInMemoryDatabasePath);
   const Camera camera = Camera::CreateFromModelId(
       kInvalidCameraId, SimplePinholeCameraModel::model_id, 1, 1, 1);
@@ -53,6 +53,8 @@ TEST(DatabaseCache, Nominal) {
   image2.SetCameraId(camera_id);
   const image_t image_id1 = database.WriteImage(image1);
   const image_t image_id2 = database.WriteImage(image2);
+  database.WritePosePrior(image_id1, PosePrior(Eigen::Vector3d::Random()));
+  database.WritePosePrior(image_id2, PosePrior(Eigen::Vector3d::Random()));
   database.WriteKeypoints(image_id1, FeatureKeypoints(10));
   database.WriteKeypoints(image_id2, FeatureKeypoints(5));
   TwoViewGeometry two_view_geometry;
@@ -71,12 +73,15 @@ TEST(DatabaseCache, Nominal) {
                                      /*image_names=*/{});
   EXPECT_EQ(cache->NumCameras(), 1);
   EXPECT_EQ(cache->NumImages(), 2);
+  EXPECT_EQ(cache->NumPosePriors(), 2);
   EXPECT_TRUE(cache->ExistsCamera(camera_id));
   EXPECT_EQ(cache->Camera(camera_id).model_id, camera.model_id);
   EXPECT_TRUE(cache->ExistsImage(image_id1));
   EXPECT_TRUE(cache->ExistsImage(image_id2));
   EXPECT_EQ(cache->Image(image_id1).NumPoints2D(), 10);
   EXPECT_EQ(cache->Image(image_id2).NumPoints2D(), 5);
+  EXPECT_TRUE(cache->PosePrior(image_id1).IsValid());
+  EXPECT_TRUE(cache->PosePrior(image_id2).IsValid());
   const auto correspondence_graph = cache->CorrespondenceGraph();
   EXPECT_TRUE(cache->CorrespondenceGraph()->ExistsImage(image_id1));
   EXPECT_EQ(cache->CorrespondenceGraph()->NumCorrespondencesForImage(image_id1),
@@ -88,6 +93,31 @@ TEST(DatabaseCache, Nominal) {
             1);
   EXPECT_EQ(cache->CorrespondenceGraph()->NumObservationsForImage(image_id2),
             1);
+}
+
+TEST(DatabaseCache, ConstructFromCustom) {
+  DatabaseCache cache;
+  EXPECT_EQ(cache.NumCameras(), 0);
+  EXPECT_EQ(cache.NumImages(), 0);
+
+  constexpr camera_t kCameraId = 42;
+  cache.AddCamera(Camera::CreateFromModelId(
+      /*camera_id*/ kCameraId, SimplePinholeCameraModel::model_id, 1, 1, 1));
+
+  constexpr image_t kImageId = 43;
+  Image image;
+  image.SetImageId(kImageId);
+  image.SetName("image");
+  image.SetCameraId(kCameraId);
+  cache.AddImage(image);
+  cache.AddPosePrior(kImageId, PosePrior(Eigen::Vector3d::Random()));
+
+  EXPECT_EQ(cache.NumCameras(), 1);
+  EXPECT_EQ(cache.NumImages(), 1);
+  EXPECT_EQ(cache.NumPosePriors(), 1);
+  EXPECT_TRUE(cache.ExistsCamera(kCameraId));
+  EXPECT_TRUE(cache.ExistsImage(kImageId));
+  EXPECT_TRUE(cache.ExistsPosePrior(kImageId));
 }
 
 }  // namespace

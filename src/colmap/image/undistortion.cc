@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -190,11 +190,12 @@ void COLMAPUndistorter::Run() {
   ThreadPool thread_pool;
   std::vector<std::future<bool>> futures;
   futures.reserve(reconstruction_.NumRegImages());
+  std::vector<image_t> image_ids;
   if (image_ids_.empty()) {
-    for (size_t i = 0; i < reconstruction_.NumRegImages(); ++i) {
-      const image_t image_id = reconstruction_.RegImageIds().at(i);
+    for (const image_t image_id : reconstruction_.RegImageIds()) {
       futures.push_back(
           thread_pool.AddTask(&COLMAPUndistorter::Undistort, this, image_id));
+      image_ids.push_back(image_id);
     }
   } else {
     for (const image_t image_id : image_ids_) {
@@ -215,12 +216,9 @@ void COLMAPUndistorter::Run() {
         "Undistorting image [%d/%d]", i + 1, futures.size());
 
     if (futures[i].get()) {
-      if (image_ids_.empty()) {
-        const image_t image_id = reconstruction_.RegImageIds().at(i);
-        image_names_.push_back(reconstruction_.Image(image_id).Name());
-      } else {
-        image_names_.push_back(reconstruction_.Image(image_ids_[i]).Name());
-      }
+      const image_t image_id =
+          (image_ids_.empty() ? image_ids : image_ids_).at(i);
+      image_names_.push_back(reconstruction_.Image(image_id).Name());
     }
   }
 
@@ -245,7 +243,7 @@ bool COLMAPUndistorter::Undistort(const image_t image_id) const {
 
   Bitmap distorted_bitmap;
   Bitmap undistorted_bitmap;
-  const Camera& camera = reconstruction_.Camera(image.CameraId());
+  const Camera& camera = *image.CameraPtr();
   Camera undistorted_camera;
 
   const std::string input_image_path = JoinPaths(image_path_, image.Name());
@@ -378,9 +376,10 @@ bool PMVSUndistorter::Undistort(const size_t reg_image_idx) const {
   const std::string proj_matrix_path =
       JoinPaths(output_path_, StringPrintf("pmvs/txt/%08d.txt", reg_image_idx));
 
-  const image_t image_id = reconstruction_.RegImageIds().at(reg_image_idx);
+  const image_t image_id =
+      *std::next(reconstruction_.RegImageIds().begin(), reg_image_idx);
   const Image& image = reconstruction_.Image(image_id);
-  const Camera& camera = reconstruction_.Camera(image.CameraId());
+  const Camera& camera = *image.CameraPtr();
 
   Bitmap distorted_bitmap;
   const std::string input_image_path = JoinPaths(image_path_, image.Name());
@@ -409,10 +408,8 @@ void PMVSUndistorter::WriteVisibilityData() const {
   file << "VISDATA" << std::endl;
   file << reconstruction_.NumRegImages() << std::endl;
 
-  const std::vector<image_t>& reg_image_ids = reconstruction_.RegImageIds();
-
-  for (size_t i = 0; i < reg_image_ids.size(); ++i) {
-    const image_t image_id = reg_image_ids[i];
+  size_t image_idx = 0;
+  for (const image_t image_id : reconstruction_.RegImageIds()) {
     const Image& image = reconstruction_.Image(image_id);
     std::unordered_set<image_t> visible_image_ids;
     for (point2D_t point2D_idx = 0; point2D_idx < image.NumPoints2D();
@@ -432,7 +429,7 @@ void PMVSUndistorter::WriteVisibilityData() const {
                                                   visible_image_ids.end());
     std::sort(sorted_visible_image_ids.begin(), sorted_visible_image_ids.end());
 
-    file << i << " " << visible_image_ids.size();
+    file << image_idx++ << " " << visible_image_ids.size();
     for (const image_t visible_image_id : sorted_visible_image_ids) {
       file << " " << visible_image_id;
     }
@@ -587,9 +584,10 @@ bool CMPMVSUndistorter::Undistort(const size_t reg_image_idx) const {
   const std::string proj_matrix_path =
       JoinPaths(output_path_, StringPrintf("%05d_P.txt", reg_image_idx + 1));
 
-  const image_t image_id = reconstruction_.RegImageIds().at(reg_image_idx);
+  const image_t image_id =
+      *std::next(reconstruction_.RegImageIds().begin(), reg_image_idx);
   const Image& image = reconstruction_.Image(image_id);
-  const Camera& camera = reconstruction_.Camera(image.CameraId());
+  const Camera& camera = *image.CameraPtr();
 
   Bitmap distorted_bitmap;
   const std::string input_image_path = JoinPaths(image_path_, image.Name());
@@ -853,19 +851,27 @@ Camera UndistortCamera(const UndistortCameraOptions& options,
 
     for (size_t y = roi_min_y; y < roi_max_y; ++y) {
       // Left border.
-      const Eigen::Vector2d point1_in_cam =
-          camera.CamFromImg(Eigen::Vector2d(0.5, y + 0.5));
-      const Eigen::Vector2d undistorted_point1 =
-          undistorted_camera.ImgFromCam(point1_in_cam);
-      left_min_x = std::min(left_min_x, undistorted_point1(0));
-      left_max_x = std::max(left_max_x, undistorted_point1(0));
+      if (const std::optional<Eigen::Vector2d> cam_point1 =
+              camera.CamFromImg(Eigen::Vector2d(0.5, y + 0.5));
+          cam_point1.has_value()) {
+        if (const std::optional<Eigen::Vector2d> undistorted_point1 =
+                undistorted_camera.ImgFromCam(cam_point1->homogeneous());
+            undistorted_point1) {
+          left_min_x = std::min(left_min_x, undistorted_point1->x());
+          left_max_x = std::max(left_max_x, undistorted_point1->x());
+        }
+      }
       // Right border.
-      const Eigen::Vector2d point2_in_cam =
-          camera.CamFromImg(Eigen::Vector2d(camera.width - 0.5, y + 0.5));
-      const Eigen::Vector2d undistorted_point2 =
-          undistorted_camera.ImgFromCam(point2_in_cam);
-      right_min_x = std::min(right_min_x, undistorted_point2(0));
-      right_max_x = std::max(right_max_x, undistorted_point2(0));
+      if (const std::optional<Eigen::Vector2d> cam_point2 =
+              camera.CamFromImg(Eigen::Vector2d(camera.width - 0.5, y + 0.5));
+          cam_point2.has_value()) {
+        if (const std::optional<Eigen::Vector2d> undistorted_point2 =
+                undistorted_camera.ImgFromCam(cam_point2->homogeneous());
+            undistorted_point2) {
+          right_min_x = std::min(right_min_x, undistorted_point2->x());
+          right_max_x = std::max(right_max_x, undistorted_point2->x());
+        }
+      }
     }
 
     // Determine min, max coordinates along left / right image border.
@@ -877,19 +883,27 @@ Camera UndistortCamera(const UndistortCameraOptions& options,
 
     for (size_t x = roi_min_x; x < roi_max_x; ++x) {
       // Top border.
-      const Eigen::Vector2d point1_in_cam =
-          camera.CamFromImg(Eigen::Vector2d(x + 0.5, 0.5));
-      const Eigen::Vector2d undistorted_point1 =
-          undistorted_camera.ImgFromCam(point1_in_cam);
-      top_min_y = std::min(top_min_y, undistorted_point1(1));
-      top_max_y = std::max(top_max_y, undistorted_point1(1));
+      if (const std::optional<Eigen::Vector2d> cam_point1 =
+              camera.CamFromImg(Eigen::Vector2d(x + 0.5, 0.5));
+          cam_point1) {
+        if (const std::optional<Eigen::Vector2d> undistorted_point1 =
+                undistorted_camera.ImgFromCam(cam_point1->homogeneous());
+            undistorted_point1) {
+          top_min_y = std::min(top_min_y, undistorted_point1->y());
+          top_max_y = std::max(top_max_y, undistorted_point1->y());
+        }
+      }
       // Bottom border.
-      const Eigen::Vector2d point2_in_cam =
-          camera.CamFromImg(Eigen::Vector2d(x + 0.5, camera.height - 0.5));
-      const Eigen::Vector2d undistorted_point2 =
-          undistorted_camera.ImgFromCam(point2_in_cam);
-      bottom_min_y = std::min(bottom_min_y, undistorted_point2(1));
-      bottom_max_y = std::max(bottom_max_y, undistorted_point2(1));
+      if (const std::optional<Eigen::Vector2d> cam_point2 =
+              camera.CamFromImg(Eigen::Vector2d(x + 0.5, camera.height - 0.5));
+          cam_point2) {
+        if (const std::optional<Eigen::Vector2d> undistorted_point2 =
+                undistorted_camera.ImgFromCam(cam_point2->homogeneous());
+            undistorted_point2) {
+          bottom_min_y = std::min(bottom_min_y, undistorted_point2->y());
+          bottom_max_y = std::max(bottom_max_y, undistorted_point2->y());
+        }
+      }
     }
 
     const double cx = undistorted_camera.PrincipalPointX();
@@ -975,7 +989,8 @@ void UndistortImage(const UndistortCameraOptions& options,
 
 void UndistortReconstruction(const UndistortCameraOptions& options,
                              Reconstruction* reconstruction) {
-  const auto distorted_cameras = reconstruction->Cameras();
+  const std::unordered_map<camera_t, Camera> distorted_cameras =
+      reconstruction->Cameras();
   for (const auto& camera : distorted_cameras) {
     if (camera.second.IsUndistorted()) {
       continue;
@@ -985,14 +1000,27 @@ void UndistortReconstruction(const UndistortCameraOptions& options,
   }
 
   for (const auto& distorted_image : reconstruction->Images()) {
-    auto& image = reconstruction->Image(distorted_image.first);
-    const auto& distorted_camera = distorted_cameras.at(image.CameraId());
-    const auto& undistorted_camera = reconstruction->Camera(image.CameraId());
+    Image& image = reconstruction->Image(distorted_image.first);
+    const Camera& distorted_camera = distorted_cameras.at(image.CameraId());
+    const Camera& undistorted_camera = *image.CameraPtr();
     for (point2D_t point2D_idx = 0; point2D_idx < image.NumPoints2D();
          ++point2D_idx) {
       auto& point2D = image.Point2D(point2D_idx);
-      point2D.xy = undistorted_camera.ImgFromCam(
-          distorted_camera.CamFromImg(point2D.xy));
+      const std::optional<Eigen::Vector2d> cam_point =
+          distorted_camera.CamFromImg(point2D.xy);
+      if (!cam_point) {
+        point2D.xy =
+            Eigen::Vector2d::Constant(std::numeric_limits<double>::quiet_NaN());
+      } else {
+        const std::optional<Eigen::Vector2d> undistorted_point =
+            undistorted_camera.ImgFromCam(cam_point->homogeneous());
+        if (undistorted_point) {
+          point2D.xy = *undistorted_point;
+        } else {
+          point2D.xy = Eigen::Vector2d::Constant(
+              std::numeric_limits<double>::quiet_NaN());
+        }
+      }
     }
   }
 }

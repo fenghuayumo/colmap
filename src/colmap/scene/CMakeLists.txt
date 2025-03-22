@@ -1,4 +1,4 @@
-# Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+# Copyright (c), ETH Zurich and UNC Chapel Hill.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -38,9 +38,10 @@ COLMAP_ADD_LIBRARY(
         correspondence_graph.h correspondence_graph.cc
         database.h database.cc
         database_cache.h database_cache.cc
+        frame.h
         image.h image.cc
-        point2d.h
-        point3d.h
+        point2d.h point2d.cc
+        point3d.h point3d.cc
         projection.h projection.cc
         reconstruction.h reconstruction.cc
         reconstruction_io.h reconstruction_io.cc
@@ -85,6 +86,11 @@ COLMAP_ADD_TEST(
     LINK_LIBS colmap_scene
 )
 COLMAP_ADD_TEST(
+    NAME frame_test
+    SRCS frame_test.cc
+    LINK_LIBS colmap_scene
+)
+COLMAP_ADD_TEST(
     NAME image_test
     SRCS image_test.cc
     LINK_LIBS colmap_scene
@@ -107,6 +113,11 @@ COLMAP_ADD_TEST(
 COLMAP_ADD_TEST(
     NAME reconstruction_test
     SRCS reconstruction_test.cc
+    LINK_LIBS colmap_scene
+)
+COLMAP_ADD_TEST(
+    NAME reconstruction_io_test
+    SRCS reconstruction_io_test.cc
     LINK_LIBS colmap_scene
 )
 COLMAP_ADD_TEST(

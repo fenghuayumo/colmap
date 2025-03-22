@@ -1,4 +1,4 @@
-# Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+# Copyright (c), ETH Zurich and UNC Chapel Hill.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -50,6 +50,11 @@ if(CUDA_ENABLED)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xptxas=-suppress-stack-size-warning")
 endif()
 
+if(COVERAGE_ENABLED)
+    add_compile_options(-coverage -fprofile-update=atomic)
+    add_link_options(-coverage)
+endif()
+
 add_subdirectory(controllers)
 add_subdirectory(estimators)
 add_subdirectory(exe)
@@ -65,7 +70,7 @@ add_subdirectory(sensor)
 add_subdirectory(sfm)
 add_subdirectory(tools)
 add_subdirectory(util)
-add_subdirectory(dll)
+add_subdirectory(dvscolmap)
 if (GUI_ENABLED)
     add_subdirectory(ui)
 endif()

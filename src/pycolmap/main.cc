@@ -13,17 +13,21 @@
 #include <pybind11/stl.h>
 
 using namespace colmap;
+using namespace pybind11::literals;
 namespace py = pybind11;
 
 void BindEstimators(py::module& m);
 void BindGeometry(py::module& m);
+void BindImage(py::module& m);
 void BindOptim(py::module& m);
 void BindPipeline(py::module& m);
+void BindFeature(py::module& m);
+void BindRetrieval(py::module& m);
 void BindScene(py::module& m);
-void BindSfMObjects(py::module& m);
-void BindSift(py::module& m);
+void BindSensor(py::module& m);
+void BindSfm(py::module& m);
 
-PYBIND11_MODULE(pycolmap, m) {
+PYBIND11_MODULE(_core, m) {
   m.doc() = "COLMAP plugin";
 #ifdef VERSION_INFO
   m.attr("__version__") = py::str(VERSION_INFO);
@@ -46,13 +50,17 @@ PYBIND11_MODULE(pycolmap, m) {
   BindGeometry(m);
   BindOptim(m);
   BindScene(m);
+  BindSensor(m);
+  BindImage(m);
   BindEstimators(m);
-  BindSfMObjects(m);
-  BindSift(m);
+  BindFeature(m);
+  BindRetrieval(m);
+  BindSfm(m);
   BindPipeline(m);
 
   m.def("set_random_seed",
         &SetPRNGSeed,
+        "seed"_a,
         "Initialize the PRNG with the given seed.");
 
   py::add_ostream_redirect(m, "ostream");

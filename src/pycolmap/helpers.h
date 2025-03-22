@@ -5,6 +5,7 @@
 #include "colmap/util/threading.h"
 
 #include <exception>
+#include <optional>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -18,8 +19,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 
-using namespace colmap;
-using namespace pybind11::literals;
 namespace py = pybind11;
 
 const Eigen::IOFormat vec_fmt(Eigen::StreamPrecision,
@@ -28,7 +27,7 @@ const Eigen::IOFormat vec_fmt(Eigen::StreamPrecision,
                               ", ");
 
 template <typename T>
-T pyStringToEnum(const py::enum_<T>& enm, const std::string& value) {
+T PyStringToEnum(const py::enum_<T>& enm, const std::string& value) {
   const auto values = enm.attr("__members__").template cast<py::dict>();
   const auto str_val = py::str(value);
   if (!values.contains(str_val)) {
@@ -41,8 +40,10 @@ T pyStringToEnum(const py::enum_<T>& enm, const std::string& value) {
 template <typename T>
 void AddStringToEnumConstructor(py::enum_<T>& enm) {
   enm.def(py::init([enm](const std::string& value) {
-    return pyStringToEnum(enm, py::str(value));  // str constructor
-  }));
+            return PyStringToEnum(enm, py::str(value));  // str constructor
+          }),
+          py::arg("name"));
+  enm.attr("__repr__") = enm.attr("__str__");
   py::implicitly_convertible<std::string, T>();
 }
 
@@ -79,7 +80,7 @@ inline void UpdateFromDict(py::object& self, const py::dict& dict) {
         if (success_on_base) {
           continue;
         }
-        std::stringstream ss;
+        std::ostringstream ss;
         ss << self.attr("__class__")
                   .attr("__name__")
                   .template cast<std::string>()
@@ -99,7 +100,7 @@ inline void UpdateFromDict(py::object& self, const py::dict& dict) {
       } else if (ex.matches(PyExc_AttributeError) &&
                  py::str(ex.value()).cast<std::string>() ==
                      std::string("can't set attribute")) {
-        std::stringstream ss;
+        std::ostringstream ss;
         ss << self.attr("__class__")
                   .attr("__name__")
                   .template cast<std::string>()
@@ -160,7 +161,7 @@ py::dict ConvertToDict(const T& self,
 
 template <typename T, typename... options>
 std::string CreateSummary(const T& self, bool write_type) {
-  std::stringstream ss;
+  std::ostringstream ss;
   auto pyself = py::cast(self);
   const std::string prefix = "    ";
   bool after_subsummary = false;
@@ -171,7 +172,7 @@ std::string CreateSummary(const T& self, bool write_type) {
     py::object attribute;
     try {
       attribute = pyself.attr(name);
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
       // Some properties are not valid for some uninitialized objects.
       continue;
     }
@@ -187,8 +188,9 @@ std::string CreateSummary(const T& self, bool write_type) {
       std::string summ = attribute.attr("summary")
                              .attr("__call__")(write_type)
                              .template cast<std::string>();
+      static const std::regex newline_regex("\n");
       // NOLINTNEXTLINE(performance-inefficient-string-concatenation)
-      summ = std::regex_replace(summ, std::regex("\n"), "\n" + prefix);
+      summ = std::regex_replace(summ, newline_regex, "\n" + prefix);
       ss << ": " << summ;
     } else {
       if (write_type) {
@@ -200,7 +202,7 @@ std::string CreateSummary(const T& self, bool write_type) {
       std::string value = py::str(attribute);
       if (value.length() > 80 && py::hasattr(attribute, "__len__")) {
         const int length = attribute.attr("__len__")().template cast<int>();
-        value = StringPrintf(
+        value = colmap::StringPrintf(
             "%c ... %d elements ... %c", value.front(), length, value.back());
       }
       ss << " = " << value;
@@ -208,6 +210,60 @@ std::string CreateSummary(const T& self, bool write_type) {
     }
   }
   return ss.str();
+}
+
+template <typename T>
+std::string CreateRepresentationFromAttributes(const T& self) {
+  std::ostringstream ss;
+  auto pyself = py::cast(self);
+  ss << pyself.attr("__class__").attr("__name__").template cast<std::string>()
+     << "(";
+  bool is_first = true;
+  for (auto& handle : pyself.attr("__dir__")()) {
+    const py::str name = py::reinterpret_borrow<py::str>(handle);
+    py::object attribute;
+    try {
+      attribute = pyself.attr(name);
+    } catch (const std::exception&) {
+      // Some properties are not valid for some uninitialized objects.
+      continue;
+    }
+    if (AttributeIsFunction(name, attribute)) {
+      continue;
+    }
+    if (!is_first) {
+      ss << ", ";
+    }
+    is_first = false;
+    ss << name.template cast<std::string>() << "=";
+    if (py::isinstance<py::str>(attribute)) {
+      ss << "'" << py::str(attribute) << "'";
+    } else {
+      ss << py::str(attribute);
+    }
+  }
+  ss << ")";
+  return ss.str();
+}
+
+template <typename T, typename = void>
+struct IsOstreamable : std::false_type {};
+
+template <typename T>
+struct IsOstreamable<
+    T,
+    std::void_t<decltype(std::declval<std::ostream&>() << std::declval<T>())>>
+    : std::true_type {};
+
+template <typename T>
+std::string CreateRepresentation(const T& self) {
+  if constexpr (IsOstreamable<T>::value) {
+    std::ostringstream ss;
+    ss << self;
+    return ss.str();
+  } else {
+    return CreateRepresentationFromAttributes<T>(self);
+  }
 }
 
 template <typename T, typename... options>
@@ -218,7 +274,7 @@ void AddDefaultsToDocstrings(py::class_<T, options...> cls) {
     py::object member;
     try {
       member = obj.attr(attribute.c_str());
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
       // Some properties are not valid for some uninitialized objects.
       continue;
     }
@@ -228,10 +284,10 @@ void AddDefaultsToDocstrings(py::class_<T, options...> cls) {
     }
     const auto type_name = py::type::of(member).attr("__name__");
     const std::string doc =
-        StringPrintf("%s (%s, default: %s)",
-                     py::str(prop.doc()).cast<std::string>().c_str(),
-                     type_name.template cast<std::string>().c_str(),
-                     py::str(member).cast<std::string>().c_str());
+        colmap::StringPrintf("%s (%s, default: %s)",
+                             py::str(prop.doc()).cast<std::string>().c_str(),
+                             type_name.template cast<std::string>().c_str(),
+                             py::str(member).cast<std::string>().c_str());
     prop.doc() = py::str(doc);
   }
 }
@@ -241,15 +297,18 @@ void MakeDataclass(py::class_<T, options...> cls,
                    const std::vector<std::string>& attributes = {}) {
   AddDefaultsToDocstrings(cls);
   if (!py::hasattr(cls, "summary")) {
-    cls.def("summary", &CreateSummary<T>, "write_type"_a = false);
+    cls.def("summary", &CreateSummary<T>, py::arg("write_type") = false);
   }
-  cls.def("mergedict", &UpdateFromDict);
+  if (!cls.attr("__dict__").contains("__repr__")) {
+    cls.def("__repr__", &CreateRepresentation<T>);
+  }
+  cls.def("mergedict", &UpdateFromDict, py::arg("kwargs"));
   cls.def(
       "todict",
       [attributes](const T& self, const bool recursive) {
         return ConvertToDict(self, attributes, recursive);
       },
-      "recursive"_a = true);
+      py::arg("recursive") = true);
 
   cls.def(py::init([cls](const py::dict& dict) {
     py::object self = cls();
@@ -302,14 +361,14 @@ for (...) {
 struct PyInterrupt {
   using clock = std::chrono::steady_clock;
   using sec = std::chrono::duration<double>;
-  explicit PyInterrupt(double gap = -1.0) : gap_(gap), start(clock::now()) {}
+  explicit PyInterrupt(double gap = -1.0) : start(clock::now()), gap_(gap) {}
 
   inline bool Raised();
 
  private:
   std::mutex mutex_;
   bool found = false;
-  Timer timer_;
+  colmap::Timer timer_;
   clock::time_point start;
   double gap_;
 };
@@ -326,7 +385,7 @@ inline bool PyInterrupt::Raised() {
 }
 
 // Instead of thread.Wait() call this to allow interrupts through python
-inline void PyWait(Thread* thread, double gap = 2.0) {
+inline void PyWait(colmap::Thread* thread, double gap = 2.0) {
   PyInterrupt py_interrupt(gap);
   while (thread->IsRunning()) {
     if (py_interrupt.Raised()) {
@@ -348,4 +407,32 @@ inline bool IsPyceresAvailable() {
     return false;
   }
   return true;
+}
+
+template <typename Parent>
+inline void DefDeprecation(
+    Parent& parent,
+    std::string old_name,
+    std::string new_name,
+    std::optional<std::string> custom_warning = std::nullopt) {
+  const std::string doc =
+      colmap::StringPrintf("Deprecated, use ``%s`` instead.", new_name.c_str());
+  parent.def(
+      old_name.c_str(),
+      [parent,
+       old_name,
+       new_name = std::move(new_name),
+       custom_warning = std::move(custom_warning)](const py::args& args,
+                                                   const py::kwargs& kwargs) {
+        if (custom_warning) {
+          PyErr_WarnEx(PyExc_DeprecationWarning, custom_warning->c_str(), 1);
+        } else {
+          std::ostringstream warning;
+          warning << old_name << "() is deprecated, use " << new_name
+                  << "() instead.";
+          PyErr_WarnEx(PyExc_DeprecationWarning, warning.str().c_str(), 1);
+        }
+        return parent.attr(new_name.c_str())(*args, **kwargs);
+      },
+      doc.c_str());
 }

@@ -1,10 +1,10 @@
 #include "glomap/io/colmap_io.h"
 #include <colmap/scene/reconstruction_manager.h>
+#include <colmap/util/file.h>
 #include <colmap/util/misc.h>
 
 namespace glomap {
-
-void ConvertGlomapToColmapReconstructionManager(
+  void ConvertGlomapToColmapReconstructionManager(
     std::shared_ptr<colmap::ReconstructionManager>& reconstruction_manager,
     const std::unordered_map<camera_t, Camera>& cameras,
     const std::unordered_map<image_t, Image>& images,
@@ -45,7 +45,6 @@ void ConvertGlomapToColmapReconstructionManager(
     std::cout << std::endl;
   }
 }
-
 
 void WriteGlomapReconstruction(
     const std::string& reconstruction_path,

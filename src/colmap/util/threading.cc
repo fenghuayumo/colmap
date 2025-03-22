@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -112,10 +112,10 @@ bool Thread::IsFinished() {
   return finished_;
 }
 
-void Thread::AddCallback(const int id, const std::function<void()>& func) {
+void Thread::AddCallback(const int id, std::function<void()> func) {
   THROW_CHECK(func);
   THROW_CHECK_GT(callbacks_.count(id), 0) << "Callback not registered";
-  callbacks_.at(id).push_back(func);
+  callbacks_.at(id).push_back(std::move(func));
 }
 
 void Thread::RegisterCallback(const int id) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,7 @@
 #include "colmap/math/random.h"
 #include "colmap/scene/reconstruction.h"
 #include "colmap/util/endian.h"
+#include "colmap/util/file.h"
 #include "colmap/util/logging.h"
 #include "colmap/util/misc.h"
 #include "colmap/util/ply.h"
@@ -122,6 +123,10 @@ bool PoissonMeshing(const PoissonMeshingOptions& options,
                     const std::string& input_path,
                     const std::string& output_path) {
   THROW_CHECK(options.Check());
+  THROW_CHECK_HAS_FILE_EXTENSION(input_path, ".ply");
+  THROW_CHECK_FILE_EXISTS(input_path);
+  THROW_CHECK_HAS_FILE_EXTENSION(output_path, ".ply");
+  THROW_CHECK_PATH_OPEN(output_path);
 
   std::vector<std::string> args;
 
@@ -390,14 +395,15 @@ class DelaunayMeshingInput {
           }
 
           // Check reprojection error between the two points.
-          const Eigen::Vector2f point_proj =
-              camera.ImgFromCam(point_local.hnormalized().cast<double>())
-                  .cast<float>();
-          const Eigen::Vector2f cell_point_proj =
-              camera.ImgFromCam(cell_point_local.hnormalized().cast<double>())
-                  .cast<float>();
+          const std::optional<Eigen::Vector2d> point_proj =
+              camera.ImgFromCam(point_local.cast<double>());
+          const std::optional<Eigen::Vector2d> cell_point_proj =
+              camera.ImgFromCam(cell_point_local.cast<double>());
+          if (!point_proj || !cell_point_proj) {
+            continue;
+          }
           const float squared_proj_dist =
-              (point_proj - cell_point_proj).squaredNorm();
+              (*point_proj - *cell_point_proj).squaredNorm();
           if (squared_proj_dist > max_squared_proj_dist) {
             insert_point = true;
             break;
@@ -441,7 +447,7 @@ struct DelaunayMeshingEdgeWeightComputer {
     }
 
     distance_sigma_ = distance_sigma_factor *
-                      std::max(std::sqrt(Percentile(edge_lengths, 25)), 1e-7f);
+                      std::max(std::sqrt(Percentile(edge_lengths, 25)), 1e-7);
     distance_threshold_ = 5 * distance_sigma_;
     distance_normalization_ = -0.5 / (distance_sigma_ * distance_sigma_);
   }
@@ -989,7 +995,7 @@ PlyMesh DelaunayMeshing(const DelaunayMeshingOptions& options,
 
   const float max_facet_side_length =
       options.max_side_length_factor *
-      Percentile(surface_facet_side_lengths,
+      Percentile(std::vector<float>(surface_facet_side_lengths),
                  options.max_side_length_percentile);
 
   mesh.faces.reserve(surface_facets.size());

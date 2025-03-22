@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -35,11 +35,10 @@ namespace colmap {
 
 BaseController::BaseController() {}
 
-void BaseController::AddCallback(const int id,
-                                 const std::function<void()>& func) {
+void BaseController::AddCallback(const int id, std::function<void()> func) {
   CHECK(func);
   CHECK_GT(callbacks_.count(id), 0) << "Callback not registered";
-  callbacks_.at(id).push_back(func);
+  callbacks_.at(id).push_back(std::move(func));
 }
 
 void BaseController::RegisterCallback(const int id) {
@@ -53,8 +52,8 @@ void BaseController::Callback(const int id) const {
   }
 }
 
-void BaseController::SetCheckIfStoppedFunc(const std::function<bool()>& func) {
-  check_if_stopped_fn_ = func;
+void BaseController::SetCheckIfStoppedFunc(std::function<bool()> func) {
+  check_if_stopped_fn_ = std::move(func);
 }
 
 bool BaseController::CheckIfStopped() {

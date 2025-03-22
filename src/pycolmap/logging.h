@@ -5,7 +5,6 @@
 #include <glog/logging.h>
 #include <pybind11/pybind11.h>
 
-using namespace colmap;
 namespace py = pybind11;
 
 struct Logging {
@@ -27,6 +26,14 @@ std::pair<std::string, int> GetPythonCallFrame() {
 
 void BindLogging(py::module& m) {
   py::class_<Logging> PyLogging(m, "logging", py::module_local());
+
+  py::enum_<Logging::LogSeverity>(PyLogging, "Level")
+      .value("INFO", Logging::LogSeverity::GLOG_INFO)
+      .value("WARNING", Logging::LogSeverity::GLOG_WARNING)
+      .value("ERROR", Logging::LogSeverity::GLOG_ERROR)
+      .value("FATAL", Logging::LogSeverity::GLOG_FATAL)
+      .export_values();
+
   PyLogging.def_readwrite_static("minloglevel", &FLAGS_minloglevel)
       .def_readwrite_static("stderrthreshold", &FLAGS_stderrthreshold)
       .def_readwrite_static("log_dir", &FLAGS_log_dir)
@@ -38,7 +45,9 @@ void BindLogging(py::module& m) {
           [](const Logging::LogSeverity severity, const std::string& path) {
             google::SetLogDestination(
                 static_cast<google::LogSeverity>(severity), path.c_str());
-          })
+          },
+          py::arg("level"),
+          py::arg("path"))
       .def_static(
           "verbose",
           [](const int level, const std::string& msg) {
@@ -47,45 +56,51 @@ void BindLogging(py::module& m) {
               google::LogMessage(frame.first.c_str(), frame.second).stream()
                   << msg;
             }
-          })
+          },
+          py::arg("level"),
+          py::arg("message"))
       .def_static(
           "info",
           [](const std::string& msg) {
             const auto frame = GetPythonCallFrame();
             google::LogMessage(frame.first.c_str(), frame.second).stream()
                 << msg;
-          })
-      .def_static("warning",
-                  [](const std::string& msg) {
-                    const auto frame = GetPythonCallFrame();
-                    google::LogMessage(
-                        frame.first.c_str(), frame.second, google::GLOG_WARNING)
-                            .stream()
-                        << msg;
-                  })
-      .def_static("error",
-                  [](const std::string& msg) {
-                    const auto frame = GetPythonCallFrame();
-                    google::LogMessage(
-                        frame.first.c_str(), frame.second, google::GLOG_ERROR)
-                            .stream()
-                        << msg;
-                  })
-      .def_static("fatal", [](const std::string& msg) {
-        const auto frame = GetPythonCallFrame();
-        google::LogMessageFatal(frame.first.c_str(), frame.second).stream()
-            << msg;
-      });
-  py::enum_<Logging::LogSeverity>(PyLogging, "Level")
-      .value("INFO", Logging::LogSeverity::GLOG_INFO)
-      .value("WARNING", Logging::LogSeverity::GLOG_WARNING)
-      .value("ERROR", Logging::LogSeverity::GLOG_ERROR)
-      .value("FATAL", Logging::LogSeverity::GLOG_FATAL)
-      .export_values();
+          },
+          py::arg("message"))
+      .def_static(
+          "warning",
+          [](const std::string& msg) {
+            const auto frame = GetPythonCallFrame();
+            google::LogMessage(
+                frame.first.c_str(), frame.second, google::GLOG_WARNING)
+                    .stream()
+                << msg;
+          },
+          py::arg("message"))
+      .def_static(
+          "error",
+          [](const std::string& msg) {
+            const auto frame = GetPythonCallFrame();
+            google::LogMessage(
+                frame.first.c_str(), frame.second, google::GLOG_ERROR)
+                    .stream()
+                << msg;
+          },
+          py::arg("message"))
+      .def_static(
+          "fatal",
+          [](const std::string& msg) {
+            const auto frame = GetPythonCallFrame();
+            google::LogMessageFatal(frame.first.c_str(), frame.second).stream()
+                << msg;
+          },
+          py::arg("message"));
 
 #if defined(GLOG_VERSION_MAJOR) && \
     (GLOG_VERSION_MAJOR > 0 || GLOG_VERSION_MINOR >= 6)
   if (!google::IsGoogleLoggingInitialized())
+#else
+  if (!py::module_::import("sys").attr("modules").contains("pyceres"))
 #endif
   {
     google::InitGoogleLogging("");

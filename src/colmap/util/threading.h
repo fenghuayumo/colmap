@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -130,7 +130,7 @@ class Thread {
   bool CheckValidSetup();
 
   // Set callbacks that can be triggered within the main run function.
-  void AddCallback(int id, const std::function<void()>& func);
+  void AddCallback(int id, std::function<void()> func);
 
   // Get timing information of the thread, properly accounting for pause times.
   const Timer& GetTimer() const;

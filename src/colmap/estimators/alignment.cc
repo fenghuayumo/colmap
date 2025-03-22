@@ -1,4 +1,4 @@
-// Copyright (c) 2023, ETH Zurich and UNC Chapel Hill.
+// Copyright (c), ETH Zurich and UNC Chapel Hill.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -47,16 +47,15 @@ struct ReconstructionAlignmentEstimator {
   typedef const Image* Y_t;
   typedef Sim3d M_t;
 
-  void SetMaxReprojError(const double max_reproj_error) {
-    max_squared_reproj_error_ = max_reproj_error * max_reproj_error;
-  }
-
-  void SetReconstructions(const Reconstruction* src_reconstruction,
-                          const Reconstruction* tgt_reconstruction) {
-    THROW_CHECK_NOTNULL(src_reconstruction);
-    THROW_CHECK_NOTNULL(tgt_reconstruction);
-    src_reconstruction_ = src_reconstruction;
-    tgt_reconstruction_ = tgt_reconstruction;
+  ReconstructionAlignmentEstimator(double max_reproj_error,
+                                   const Reconstruction* src_reconstruction,
+                                   const Reconstruction* tgt_reconstruction)
+      : max_squared_reproj_error_(max_reproj_error * max_reproj_error),
+        src_reconstruction_(src_reconstruction),
+        tgt_reconstruction_(tgt_reconstruction) {
+    THROW_CHECK_GE(max_reproj_error, 0);
+    THROW_CHECK_NOTNULL(src_reconstruction_);
+    THROW_CHECK_NOTNULL(tgt_reconstruction_);
   }
 
   // Estimate 3D similarity transform from corresponding projection centers.
@@ -105,15 +104,13 @@ struct ReconstructionAlignmentEstimator {
     residuals->resize(src_images.size());
 
     for (size_t i = 0; i < src_images.size(); ++i) {
-      const auto& src_image = *src_images[i];
-      const auto& tgt_image = *tgt_images[i];
+      const Image& src_image = *src_images[i];
+      const Image& tgt_image = *tgt_images[i];
 
       THROW_CHECK_EQ(src_image.ImageId(), tgt_image.ImageId());
 
-      const auto& src_camera =
-          src_reconstruction_->Camera(src_image.CameraId());
-      const auto& tgt_camera =
-          tgt_reconstruction_->Camera(tgt_image.CameraId());
+      const Camera& src_camera = *src_image.CameraPtr();
+      const Camera& tgt_camera = *tgt_image.CameraPtr();
 
       const Eigen::Matrix3x4d src_cam_from_world =
           src_image.CamFromWorld().ToMatrix();
@@ -178,9 +175,9 @@ struct ReconstructionAlignmentEstimator {
   }
 
  private:
-  double max_squared_reproj_error_ = 0.0;
-  const Reconstruction* src_reconstruction_ = nullptr;
-  const Reconstruction* tgt_reconstruction_ = nullptr;
+  double max_squared_reproj_error_;
+  const Reconstruction* src_reconstruction_;
+  const Reconstruction* tgt_reconstruction_;
 };
 
 }  // namespace
@@ -226,21 +223,51 @@ bool AlignReconstructionToLocations(
     return false;
   }
 
-  LORANSAC<SimilarityTransformEstimator<3, true>,
-           SimilarityTransformEstimator<3, true>>
-      ransac(ransac_options);
-
-  const auto report = ransac.Estimate(src, dst);
+  Sim3d tgt_from_src_;
+  const auto report =
+      EstimateSim3dRobust(src, dst, ransac_options, tgt_from_src_);
 
   if (report.support.num_inliers < static_cast<size_t>(min_common_images)) {
     return false;
   }
 
   if (tgt_from_src != nullptr) {
-    *tgt_from_src = Sim3d::FromMatrix(report.model);
+    *tgt_from_src = tgt_from_src_;
   }
 
   return true;
+}
+
+bool AlignReconstructionToPosePriors(
+    const Reconstruction& src_reconstruction,
+    const std::unordered_map<image_t, PosePrior>& tgt_pose_priors,
+    const RANSACOptions& ransac_options,
+    Sim3d* tgt_from_src) {
+  std::vector<Eigen::Vector3d> src;
+  std::vector<Eigen::Vector3d> tgt;
+  src.reserve(tgt_pose_priors.size());
+  tgt.reserve(tgt_pose_priors.size());
+
+  for (const image_t image_id : src_reconstruction.RegImageIds()) {
+    const auto pose_prior_it = tgt_pose_priors.find(image_id);
+    if (pose_prior_it != tgt_pose_priors.end() &&
+        pose_prior_it->second.IsValid()) {
+      const auto& image = src_reconstruction.Image(image_id);
+      src.push_back(image.ProjectionCenter());
+      tgt.push_back(pose_prior_it->second.position);
+    }
+  }
+
+  if (src.size() < 3) {
+    LOG(WARNING)
+        << "Not enough valid pose priors for PosePrior based alignment!";
+    return false;
+  }
+
+  if (ransac_options.max_error > 0) {
+    return EstimateSim3dRobust(src, tgt, ransac_options, *tgt_from_src).success;
+  }
+  return EstimateSim3d(src, tgt, *tgt_from_src);
 }
 
 bool AlignReconstructionsViaReprojections(
@@ -257,12 +284,11 @@ bool AlignReconstructionsViaReprojections(
   ransac_options.min_inlier_ratio = 0.2;
 
   LORANSAC<ReconstructionAlignmentEstimator, ReconstructionAlignmentEstimator>
-      ransac(ransac_options);
-  ransac.estimator.SetMaxReprojError(max_reproj_error);
-  ransac.estimator.SetReconstructions(&src_reconstruction, &tgt_reconstruction);
-  ransac.local_estimator.SetMaxReprojError(max_reproj_error);
-  ransac.local_estimator.SetReconstructions(&src_reconstruction,
-                                            &tgt_reconstruction);
+      ransac(ransac_options,
+             ReconstructionAlignmentEstimator(
+                 max_reproj_error, &src_reconstruction, &tgt_reconstruction),
+             ReconstructionAlignmentEstimator(
+                 max_reproj_error, &src_reconstruction, &tgt_reconstruction));
 
   const std::vector<std::pair<image_t, image_t>> common_image_ids =
       src_reconstruction.FindCommonRegImageIds(tgt_reconstruction);
@@ -297,7 +323,7 @@ bool AlignReconstructionsViaProjCenters(
   std::vector<std::string> ref_image_names;
   std::vector<Eigen::Vector3d> ref_proj_centers;
   for (const auto& image : tgt_reconstruction.Images()) {
-    if (image.second.IsRegistered()) {
+    if (image.second.HasPose()) {
       ref_image_names.push_back(image.second.Name());
       ref_proj_centers.push_back(image.second.ProjectionCenter());
     }
@@ -398,13 +424,8 @@ bool AlignReconstructionsViaPoints(const Reconstruction& src_reconstruction,
   RANSACOptions ransac_options;
   ransac_options.max_error = max_error;
   ransac_options.min_inlier_ratio = min_inlier_ratio;
-  LORANSAC<SimilarityTransformEstimator<3, true>,
-           SimilarityTransformEstimator<3, true>>
-      ransac(ransac_options);
-  const auto report = ransac.Estimate(src_xyz, tgt_xyz);
-  if (report.success) {
-    *tgt_from_src = Sim3d::FromMatrix(report.model);
-  }
+  const auto report =
+      EstimateSim3dRobust(src_xyz, tgt_xyz, ransac_options, *tgt_from_src);
   return report.success;
 }
 
@@ -436,15 +457,15 @@ bool MergeReconstructions(const double max_reproj_error,
   // Register the missing images in this src_reconstruction.
   for (const auto image_id : missing_image_ids) {
     auto src_image = src_reconstruction.Image(image_id);
-    src_image.SetRegistered(false);
-    src_image.CamFromWorld() =
-        TransformCameraWorld(tgt_from_src, src_image.CamFromWorld());
-    tgt_reconstruction.AddImage(src_image);
-    tgt_reconstruction.RegisterImage(image_id);
+    src_image.ResetCameraPtr();
+    src_image.SetCamFromWorld(
+        TransformCameraWorld(tgt_from_src, src_image.CamFromWorld()));
     if (!tgt_reconstruction.ExistsCamera(src_image.CameraId())) {
       tgt_reconstruction.AddCamera(
           src_reconstruction.Camera(src_image.CameraId()));
     }
+    tgt_reconstruction.AddImage(src_image);
+    tgt_reconstruction.RegisterImage(image_id);
   }
 
   // Merge the two point clouds using the following two rules:

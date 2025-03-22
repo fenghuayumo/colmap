@@ -9,7 +9,7 @@ namespace glomap {
 void EstimateRelativePoses(ViewGraph& view_graph,
                            std::unordered_map<camera_t, Camera>& cameras,
                            std::unordered_map<image_t, Image>& images,
-                           float& progress,
+                          float& progress,
                            const RelativePoseEstimationOptions& options) {
   std::vector<image_pair_t> valid_pair_ids;
   for (auto& [image_pair_id, image_pair] : view_graph.image_pairs) {
