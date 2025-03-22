@@ -160,11 +160,13 @@ auto ColmapSparseReconstruct::pause() -> void {
 }
 
 auto ColmapSparseReconstruct::resume() -> void {
-
+  if (controller_ == nullptr) return;
+  controller_->Resume();
 }
 
 auto ColmapSparseReconstruct::wait() -> void {
-
+  if (controller_ == nullptr) return;
+  controller_->Wait();
 }
 
 bool ColmapSparseReconstruct::isStopped() { 
