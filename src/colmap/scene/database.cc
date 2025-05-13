@@ -252,24 +252,23 @@ Database::~Database() { Close(); }
  #ifdef _WIN32
  #include <Windows.h>
  #endif
-inline std::string utf8_to_multibyte(const std::string& utf8_str) 
-{
+inline std::string multibyte_to_utf8(const std::string& mb_str) {
 #ifdef _WIN32
-  int len = MultiByteToWideChar(CP_ACP, 0, utf8_str.c_str(), -1, nullptr, 0);
+  int len = MultiByteToWideChar(CP_ACP, 0, mb_str.c_str(), -1, nullptr, 0);
   std::wstring wide_str(len, 0);
-  MultiByteToWideChar(CP_ACP, 0, utf8_str.c_str(), -1, &wide_str[0], len);
+  MultiByteToWideChar(CP_ACP, 0, mb_str.c_str(), -1, &wide_str[0], len);
 
   len = WideCharToMultiByte(
       CP_UTF8, 0, wide_str.c_str(), -1, nullptr, 0, nullptr, nullptr);
-  std::string mb_str(len, 0);
+  std::string utf8_str(len, 0);
   WideCharToMultiByte(
-      CP_UTF8, 0, wide_str.c_str(), -1, &mb_str[0], len, nullptr, nullptr);
-  if (mb_str[len - 1] == 0) {
-    mb_str = mb_str.substr(0, len - 1);
+      CP_UTF8, 0, wide_str.c_str(), -1, &utf8_str[0], len, nullptr, nullptr);
+  if (utf8_str[len - 1] == 0) {
+    utf8_str = utf8_str.substr(0, len - 1);
   }
-  return mb_str;
-#else
   return utf8_str;
+#else
+  return mb_str;
 #endif
 }
 void Database::Open(const std::string& path) {
@@ -280,7 +279,7 @@ void Database::Open(const std::string& path) {
   // Modifications to the database will still be serialized, but multiple
   // connections can read concurrently.
   SQLITE3_CALL(sqlite3_open_v2(
-      utf8_to_multibyte(path).c_str(),
+      multibyte_to_utf8(path).c_str(),
       &database_,
       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
       nullptr));
