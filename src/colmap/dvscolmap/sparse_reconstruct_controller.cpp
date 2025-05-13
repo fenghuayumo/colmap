@@ -271,20 +271,28 @@ const std::unordered_map<point3D_t, struct Point3D>& SparseReconstructionControl
   return {};
 }
 
+std::unordered_map<camera_t, struct Camera> empty_cams;
 const std::unordered_map<camera_t, struct Camera>& SparseReconstructionController::Cameras(int id) const
 {
   if( id < reconstruction_manager_->Size()){
     return reconstruction_manager_->Get(id)->Cameras();
   }
-  return {};
+  return empty_cams;
 }
+
+std::unordered_map<image_t, class Image> empty_imags;
 
 const std::unordered_map<image_t, class Image>&
 SparseReconstructionController::Images(int id) const {
   if (id < reconstruction_manager_->Size()) {
-    return reconstruction_manager_->Get(id)->Images();
+    // return reconstruction_manager_->Get(id)->Images();
+    std::unordered_map<image_t, class Image> images;
+    for(auto reg_id : reconstruction_manager_->Get(id)->RegImageIds()){
+      images[reg_id] = reconstruction_manager_->Get(id)->Image(reg_id);
+    }
+    return images;
   }
-  return {};
+  return empty_imags;
 }
 
 }  // namespace colmap

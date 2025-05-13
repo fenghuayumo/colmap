@@ -120,7 +120,6 @@ auto ColmapSparseReconstruct::getImageTracks(int id) const
         else if (controller_->NumReconstructions() >= 1) {
           const auto& imgs = controller_->Images(id);
           for (const auto& [_, img] : imgs) {
-            imgIds.push_back({img.ImageId(), img.Name(), img.CameraId()});
             const auto& camfromWorld = img.CamFromWorld();
             float rotx = camfromWorld.rotation.x();
             float roty = camfromWorld.rotation.y();
@@ -129,8 +128,11 @@ auto ColmapSparseReconstruct::getImageTracks(int id) const
             float tx = camfromWorld.translation.x();
             float ty = camfromWorld.translation.y();
             float tz = camfromWorld.translation.z();
-            imgIds.back().rotation = {rotx, roty,rotz,rotw};
-            imgIds.back().translation = {tx,ty,tz};
+            imgIds.push_back({img.ImageId(),
+                              img.Name(),
+                              img.CameraId(),
+                              colmap::vec4<float>{rotx,roty,rotz,rotw},
+                              colmap::vec3<float>{tx,ty,tz}});
           }
         }
     }
