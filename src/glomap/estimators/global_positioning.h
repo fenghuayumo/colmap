@@ -29,6 +29,10 @@ struct GlobalPositionerOptions : public OptimizationBaseOptions {
   bool optimize_points = true;
   bool optimize_scales = true;
 
+  bool use_gpu = true;
+  std::string gpu_index = "-1";
+  int min_num_images_gpu_solver = 50;
+
   // Constrain the minimum number of views per track
   int min_num_view_per_track = 3;
 
@@ -42,7 +46,10 @@ struct GlobalPositionerOptions : public OptimizationBaseOptions {
 
   GlobalPositionerOptions() : OptimizationBaseOptions() {
     thres_loss_function = 1e-1;
-    loss_function = std::make_shared<ceres::HuberLoss>(thres_loss_function);
+  }
+
+  std::shared_ptr<ceres::LossFunction> CreateLossFunction() {
+    return std::make_shared<ceres::HuberLoss>(thres_loss_function);
   }
 };
 
@@ -104,6 +111,7 @@ class GlobalPositioner {
   std::unique_ptr<ceres::Problem> problem_;
 
   // Loss functions for reweighted terms.
+  std::shared_ptr<ceres::LossFunction> loss_function_;
   std::shared_ptr<ceres::LossFunction> loss_function_ptcam_uncalibrated_;
   std::shared_ptr<ceres::LossFunction> loss_function_ptcam_calibrated_;
 

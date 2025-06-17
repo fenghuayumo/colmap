@@ -1,7 +1,7 @@
-
 set(SOURCES
     controllers/global_mapper.cc
     controllers/option_manager.cc
+    controllers/rotation_averager.cc
     controllers/track_establishment.cc
     controllers/track_retriangulation.cc
     estimators/bundle_adjustment.cc
@@ -12,7 +12,7 @@ set(SOURCES
     estimators/view_graph_calibration.cc
     io/colmap_converter.cc
     io/colmap_io.cc
-    io/gravity_io.cc
+    io/pose_io.cc
     math/gravity.cc
     math/rigid3d.cc
     math/tree.cc
@@ -30,6 +30,7 @@ set(SOURCES
 set(HEADERS
     controllers/global_mapper.h
     controllers/option_manager.h
+    controllers/rotation_averager.h
     controllers/track_establishment.h
     controllers/track_retriangulation.h
     estimators/bundle_adjustment.h
@@ -42,7 +43,7 @@ set(HEADERS
     estimators/view_graph_calibration.h
     io/colmap_converter.h
     io/colmap_io.h
-    io/gravity_io.h
+    io/pose_io.h
     math/gravity.h
     math/l1_solver.h
     math/rigid3d.h
@@ -64,6 +65,7 @@ set(HEADERS
     scene/types.h
 )
 
+# add_library(glomap ${SOURCES} ${HEADERS})
 set(FOLDER_NAME "glomap")
 
 set(OPTIONAL_LIBS)
@@ -78,7 +80,6 @@ if(GUI_ENABLED)
         colmap_ui
     )
 endif()
-
 # find_package(SuiteSparse COMPONENTS CHOLMOD REQUIRED)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SuiteSparse_CHOLMOD_INCLUDE_DIR})
 COLMAP_ADD_LIBRARY(
@@ -116,3 +117,31 @@ else()
         -Wno-unused-variable
     )
 endif()
+
+
+# add_executable(glomap_main
+#     glomap.cc
+#     exe/global_mapper.h
+#     exe/global_mapper.cc
+#     exe/rotation_averager.h
+#     exe/rotation_averager.cc
+# )
+# target_link_libraries(glomap_main glomap)
+
+# set_target_properties(glomap_main PROPERTIES OUTPUT_NAME glomap)
+# install(TARGETS glomap_main DESTINATION bin)
+
+
+# if(TESTS_ENABLED)
+#     add_executable(glomap_test
+#         controllers/global_mapper_test.cc
+#         controllers/rotation_averager_test.cc
+#     )
+#     target_link_libraries(
+#         glomap_test
+#         PRIVATE
+#             glomap
+#             GTest::gtest
+#             GTest::gtest_main)
+#     add_test(NAME glomap_test COMMAND glomap_test)
+# endif()

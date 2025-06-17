@@ -14,15 +14,23 @@ struct BundleAdjusterOptions : public OptimizationBaseOptions {
   bool optimize_rotations = true;
   bool optimize_translation = true;
   bool optimize_intrinsics = true;
+  bool optimize_principal_point = false;
   bool optimize_points = true;
+
+  bool use_gpu = true;
+  std::string gpu_index = "-1";
+  int min_num_images_gpu_solver = 50;
 
   // Constrain the minimum number of views per track
   int min_num_view_per_track = 3;
 
   BundleAdjusterOptions() : OptimizationBaseOptions() {
     thres_loss_function = 1.;
-    loss_function = std::make_shared<ceres::HuberLoss>(thres_loss_function);
     solver_options.max_num_iterations = 200;
+  }
+
+  std::shared_ptr<ceres::LossFunction> CreateLossFunction() {
+    return std::make_shared<ceres::HuberLoss>(thres_loss_function);
   }
 };
 
@@ -65,6 +73,7 @@ class BundleAdjuster {
   BundleAdjusterOptions options_;
 
   std::unique_ptr<ceres::Problem> problem_;
+  std::shared_ptr<ceres::LossFunction> loss_function_;
 };
 
 }  // namespace glomap

@@ -34,6 +34,7 @@ void ConvertGlomapToColmap(const std::unordered_map<camera_t, Camera>& cameras,
   }
 
   // Prepare the 2d-3d correspondences
+  size_t min_supports = 2;
   std::unordered_map<image_t, std::vector<track_t>> image_to_point3D;
   if (tracks.size() > 0 || include_image_points) {
     // Initialize every point to corresponds to invalid point
@@ -47,7 +48,7 @@ void ConvertGlomapToColmap(const std::unordered_map<camera_t, Camera>& cameras,
 
     if (tracks.size() > 0) {
       for (auto& [track_id, track] : tracks) {
-        if (track.observations.size() < 3) {
+        if (track.observations.size() < min_supports) {
           continue;
         }
         for (auto& observation : track.observations) {
@@ -80,7 +81,7 @@ void ConvertGlomapToColmap(const std::unordered_map<camera_t, Camera>& cameras,
       colmap_point.track.AddElement(colmap_track_el);
     }
 
-    if (colmap_point.track.Length() < 2) continue;
+    if (track.observations.size() < min_supports) continue;
 
     colmap_point.track.Compress();
     reconstruction.AddPoint3D(track_id, std::move(colmap_point));
@@ -187,14 +188,15 @@ void ConvertDatabaseToGlomap(const colmap::Database& database,
               << images_colmap.size() << std::flush;
     counter++;
 
-    image_t image_id = image.ImageId();
+    const image_t image_id = image.ImageId();
     if (image_id == colmap::kInvalidImageId) continue;
     auto ite = images.insert(std::make_pair(
         image_id, Image(image_id, image.CameraId(), image.Name())));
     const colmap::PosePrior prior = database.ReadPosePrior(image_id);
     if (prior.IsValid()) {
-      ite.first->second.cam_from_world = Rigid3d(
-          colmap::Rigid3d(Eigen::Quaterniond::Identity(), prior.position));
+      const colmap::Rigid3d world_from_cam_prior(Eigen::Quaterniond::Identity(),
+                                                 prior.position);
+      ite.first->second.cam_from_world = Rigid3d(Inverse(world_from_cam_prior));
     } else {
       ite.first->second.cam_from_world = Rigid3d();
     }
@@ -203,20 +205,18 @@ void ConvertDatabaseToGlomap(const colmap::Database& database,
 
   // Read keypoints
   for (auto& [image_id, image] : images) {
-    colmap::FeatureKeypoints keypoints = database.ReadKeypoints(image_id);
-
-    image.features.reserve(keypoints.size());
-    for (int i = 0; i < keypoints.size(); i++) {
-      image.features.emplace_back(
-          Eigen::Vector2d(keypoints[i].x, keypoints[i].y));
+    const colmap::FeatureKeypoints keypoints = database.ReadKeypoints(image_id);
+    const int num_keypoints = keypoints.size();
+    image.features.resize(num_keypoints);
+    for (int i = 0; i < num_keypoints; i++) {
+      image.features[i] = Eigen::Vector2d(keypoints[i].x, keypoints[i].y);
     }
   }
 
   // Add the cameras
   std::vector<colmap::Camera> cameras_colmap = database.ReadAllCameras();
   for (auto& camera : cameras_colmap) {
-    camera_t camera_id = camera.camera_id;
-    cameras[camera_id] = camera;
+    cameras[camera.camera_id] = camera;
   }
 
   // Add the matches
