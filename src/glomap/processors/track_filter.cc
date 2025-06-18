@@ -24,12 +24,12 @@ int TrackFilter::FilterTracksByReprojection(
         const Eigen::Vector3d& feature_undist =
             image.features_undist.at(feature_id);
 
-        Eigen::Vector2d pt_reproj = pt_calc.head(2) / pt_calc(2);
+        Eigen::Vector3d pt_reproj = pt_calc / pt_calc(2);
         reprojection_error =
             (pt_reproj - feature_undist.head(2) / (feature_undist(2) + EPS))
                 .norm();
       } else {
-        Eigen::Vector2d pt_reproj = pt_calc.head(2) / pt_calc(2);
+        Eigen::Vector3d pt_reproj = pt_calc / pt_calc(2);
         Eigen::Vector2d pt_dist;
         pt_dist = cameras.at(image.camera_id).ImgFromCam(pt_reproj).value();
         reprojection_error = (pt_dist - image.features.at(feature_id)).norm();
