@@ -385,7 +385,7 @@ void GlobalPositioner::ParameterizeVariables(
 #endif
 
 #if (CERES_VERSION_MAJOR >= 3 ||                                \
-     (CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 3)) && \
+     (CERES_VERSION_MAJOR == 2 && CERES_VERSION_MINOR >= 2)) && \
     !defined(CERES_NO_CUDSS)
   if (options_.use_gpu && num_images >= options_.min_num_images_gpu_solver) {
     cuda_solver_enabled = true;

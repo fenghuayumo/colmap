@@ -91,7 +91,11 @@ bool IsPtrRGB(FIBITMAP* ptr) {
   return FreeImage_GetColorType(ptr) == FIC_RGB && FreeImage_GetBPP(ptr) == 24;
 }
 
-bool IsPtrSupported(FIBITMAP* ptr) { return IsPtrGrey(ptr) || IsPtrRGB(ptr); }
+bool IsPtrRGBA(FIBITMAP* ptr) {
+  return FreeImage_GetColorType(ptr) == FIC_RGBALPHA && FreeImage_GetBPP(ptr) == 32;
+}
+
+bool IsPtrSupported(FIBITMAP* ptr) { return IsPtrGrey(ptr) || IsPtrRGB(ptr);}
 
 }  // namespace
 
@@ -559,7 +563,7 @@ bool Bitmap::ExifAltitude(double* altitude) const {
   return false;
 }
 
-bool Bitmap::Read(const std::string& path, const bool as_rgb) {
+bool Bitmap::Read(const std::string& path, const bool as_rgb, Bitmap* mask) {
   if (!ExistsFile(path)) {
     return false;
   }
@@ -576,6 +580,17 @@ bool Bitmap::Read(const std::string& path, const bool as_rgb) {
   }
 
   if (!IsPtrRGB(handle_.ptr) && as_rgb) {
+    if(mask){
+      if(IsPtrRGBA(handle_.ptr)){
+        // get alpha channel
+        FIBITMAP* alpha_channel = FreeImage_GetChannel(handle_.ptr, FICC_ALPHA);
+        FIBITMAP* converted_bitmap = FreeImage_ConvertToGreyscale(alpha_channel);
+        mask->SetPtr(converted_bitmap);
+        mask->width_ = width_;
+        mask->height_ = height_;
+        mask->channels_ = 1;
+      }
+    }
     FIBITMAP* converted_bitmap = FreeImage_ConvertTo24Bits(handle_.ptr);
     handle_ = FreeImageHandle(converted_bitmap);
   } else if (!IsPtrGrey(handle_.ptr) && !as_rgb) {

@@ -345,6 +345,8 @@ class FeatureExtractorController : public Thread {
         LOG(ERROR) << "Mask at " << reader_options_.camera_mask_path
                    << " does not exist.";
       }
+    }else{
+      
     }
 
     const int num_threads = GetEffectiveNumThreads(sift_options_.num_threads);

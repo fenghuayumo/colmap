@@ -94,6 +94,7 @@ COLMAP_ADD_LIBRARY(
         colmap_sfm
         Eigen3::Eigen
         Ceres::ceres
+        Ceres::ceres_cuda_kernels
         # SuiteSparse::CHOLMOD
         PoseLib::PoseLib
         colmap_util

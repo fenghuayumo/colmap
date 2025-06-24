@@ -137,7 +137,7 @@ ImageReader::Status ImageReader::Next(Camera* camera,
   // Read image.
   //////////////////////////////////////////////////////////////////////////////
 
-  if (!bitmap->Read(image_path, false)) {
+  if (!bitmap->Read(image_path, false,mask)) {
     return Status::BITMAP_ERROR;
   }
 
@@ -147,7 +147,7 @@ ImageReader::Status ImageReader::Next(Camera* camera,
 
   if (mask && !options_.mask_path.empty()) {
     const std::string mask_path =
-        JoinPaths(options_.mask_path, image->Name() + ".png");
+        JoinPaths(options_.mask_path, image->Name());
     if (!ExistsFile(mask_path)) {
       LOG(ERROR) << "Mask at " << mask_path << " does not exist.";
       return Status::MASK_ERROR;
@@ -157,7 +157,6 @@ ImageReader::Status ImageReader::Next(Camera* camera,
       return Status::MASK_ERROR;
     }
   }
-
   //////////////////////////////////////////////////////////////////////////////
   // Check for well-formed data.
   //////////////////////////////////////////////////////////////////////////////

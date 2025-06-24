@@ -80,7 +80,8 @@ SparseReconstructionController::SparseReconstructionController(
   option_manager_.sift_extraction->gpu_index = options_.gpu_index;
   option_manager_.sift_matching->gpu_index = options_.gpu_index;
   option_manager_.patch_match_stereo->gpu_index = options_.gpu_index;
-
+  //option_manager_.mapper->ba_use_gpu = options_.use_gpu;
+  //option_manager_.bundle_adjustment->use_gpu = options_.use_gpu;
   feature_extractor_ = CreateFeatureExtractorController(
       reader_options, *option_manager_.sift_extraction);
 
@@ -140,28 +141,34 @@ float SparseReconstructionController::GetProgressOnCurrentPhase() {
 }
 
 void SparseReconstructionController::Run() {
-  if (IsStopped()) {
-    return;
-  }
-  status_phase = 1;
-  RunFeatureExtraction();
+  try{
+    if (IsStopped()) {
+      return;
+    }
+    status_phase = 1;
+    RunFeatureExtraction();
 
-  if (IsStopped()) {
-    return;
-  }
-  status_phase = 2;
-  RunFeatureMatching();
+    if (IsStopped()) {
+      return;
+    }
+    status_phase = 2;
+    RunFeatureMatching();
 
-  if (IsStopped()) {
-    return;
-  }
-  status_phase = 3;
-  RunSparseMapper();
+    if (IsStopped()) {
+      return;
+    }
+    status_phase = 3;
+    RunSparseMapper();
 
-  if (IsStopped()) {
-    return;
+    if (IsStopped()) {
+      return;
+    }
+    status_phase = 4;
   }
-  status_phase = 4;
+  catch(const std::exception& e)
+  {
+    std::cerr << e.what() << '\n';
+  }
 }
 
 void SparseReconstructionController::RunFeatureExtraction() {
@@ -256,6 +263,7 @@ void SparseReconstructionController::RunSparseMapper() {
     incremental_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
     incremental_mapper->Run();
   }
+  std::cout << "sparse reconstruction done\n";
   if( options_.output_sparse_points ){
     CreateDirIfNotExists(sparse_path);
     reconstruction_manager_->Write(sparse_path);
@@ -286,11 +294,11 @@ const std::unordered_map<image_t, class Image>&
 SparseReconstructionController::Images(int id) const {
   if (id < reconstruction_manager_->Size()) {
     // return reconstruction_manager_->Get(id)->Images();
-    std::unordered_map<image_t, class Image> images;
+    empty_imags.clear();
     for(auto reg_id : reconstruction_manager_->Get(id)->RegImageIds()){
-      images[reg_id] = reconstruction_manager_->Get(id)->Image(reg_id);
+      empty_imags[reg_id] = reconstruction_manager_->Get(id)->Image(reg_id);
     }
-    return images;
+    return empty_imags;
   }
   return empty_imags;
 }
