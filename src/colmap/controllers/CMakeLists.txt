@@ -56,7 +56,7 @@ COLMAP_ADD_LIBRARY(
         colmap_mvs
         colmap_sfm
         Ceres::ceres
-        Ceres::ceres_cuda_kernels
+        # Ceres::ceres_cuda_kernels
         Boost::boost
 )
 

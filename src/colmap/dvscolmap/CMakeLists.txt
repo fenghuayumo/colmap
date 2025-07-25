@@ -35,8 +35,8 @@ COLMAP_ADD_DLL(
         colmap_optim
         colmap_scene
         colmap_util
-        glomap
-        PoseLib::PoseLib
+        # glomap
+        # PoseLib::PoseLib
         SuiteSparse::CHOLMOD
         ${OPTIONAL_LIBS}
     PRIVATE_LINK_LIBS

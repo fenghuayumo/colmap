@@ -25,6 +25,7 @@ auto ColmapSparseReconstruct::run() ->bool
     _option.use_hierachy = option.use_hierachy;
     _option.use_glomapper = option.use_glomap;
     _option.output_sparse_points = option.output_sparse_points;
+    _option.single_camera = option.single_camera;
     _option.data_type = option.video ? colmap::SparseReconstructionController::DataType::VIDEO :
         colmap::SparseReconstructionController::DataType::INDIVIDUAL;
     std::shared_ptr<colmap::ReconstructionManager> reconstruction_manager_ =

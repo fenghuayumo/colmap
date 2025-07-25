@@ -4,6 +4,7 @@
 #include "colmap/controllers/option_manager.h"
 #include "colmap/scene/reconstruction_manager.h"
 #include "colmap/util/threading.h"
+#include "colmap/util/controller_thread.h"
 #include "glomap/controllers/global_mapper.h"
 #include <memory>
 #include <string>
@@ -66,7 +67,9 @@ class SparseReconstructionController : public Thread {
       std::shared_ptr<ReconstructionManager> reconstruction_manager);
 
   void Stop() override;
-
+  void Pause() override;
+  void Resume() override;
+  
   const std::unordered_map<point3D_t, struct Point3D>& Points3D(int id) const;
   const std::unordered_map<camera_t, struct Camera>& Cameras(int id) const;
   const std::unordered_map<image_t, class Image>& Images(int id) const;
@@ -93,8 +96,8 @@ class SparseReconstructionController : public Thread {
   std::unique_ptr<Thread> sequential_matcher_;
   std::unique_ptr<Thread> vocab_tree_matcher_;
 
-  std::shared_ptr<class IncrementalPipeline> incremental_mapper;
-  std::shared_ptr<class HierarchicalPipeline> hierarchical_mapper;
+  std::unique_ptr<ControllerThread<class IncrementalPipeline>> incremental_mapper;
+  std::unique_ptr<ControllerThread<class HierarchicalPipeline>> hierarchical_mapper;
   std::shared_ptr<glomap::GlobalMapper>         global_mapper;
 };
 

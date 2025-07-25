@@ -121,6 +121,20 @@ void SparseReconstructionController::Stop() {
   Thread::Stop();
 }
 
+void SparseReconstructionController::Pause() {
+  if (active_thread_ != nullptr) {
+    active_thread_->Pause();
+  }
+  Thread::Pause();
+}
+
+void SparseReconstructionController::Resume() {
+  if (active_thread_ != nullptr) {
+    active_thread_->Resume();
+  }
+  Thread::Resume();
+}
+
 int SparseReconstructionController::GetSparseReconstructPhase() {
   return status_phase;
 }
@@ -131,11 +145,11 @@ float SparseReconstructionController::GetProgressOnCurrentPhase() {
   } else if (status_phase == 2) {
     return exhaustive_matcher_->GetProgress();
   } else if (status_phase == 3) {
-    if (options_.use_glomapper)
-      return global_mapper ? global_mapper->GetProgress() : 0.0f;
+    // if (options_.use_glomapper)
+    //   return global_mapper ? global_mapper->GetProgress() : 0.0f;
     if(!options_.use_hierachy)
-      return incremental_mapper ? incremental_mapper->GetProgress() : 0.0f;
-    return hierarchical_mapper ? hierarchical_mapper->GetProgress() : 0.0f;
+      return incremental_mapper ? incremental_mapper->GetController()->GetProgress() : 0.0f;
+    return hierarchical_mapper ? hierarchical_mapper->GetController()->GetProgress() : 0.0f;
   }
   return 1.0f;
 }
@@ -159,7 +173,7 @@ void SparseReconstructionController::Run() {
     }
     status_phase = 3;
     RunSparseMapper();
-
+    std::cout << "RunSparseMapper done\n";
     if (IsStopped()) {
       return;
     }
@@ -221,62 +235,68 @@ void SparseReconstructionController::RunSparseMapper() {
   }
 
   status_phase = 3;
-  if( options_.use_glomapper)
-  {
-    glomap::GlobalMapperOptions glomapOptions;
+  // if( options_.use_glomapper)
+  // {
+  //   glomap::GlobalMapperOptions glomapOptions;
 
-    glomap::ViewGraph view_graph;
+  //   glomap::ViewGraph view_graph;
 
-    const colmap::Database database(*option_manager_.database_path);
-    glomap::ConvertDatabaseToGlomap(database, view_graph, cameras, images);
-    std::cout << "glomap mapper start\n";
-    //glomapOptions.opt_gp.constraint_type = GlobalPositionerOptions::ONLY_POINTS;
-    glomapOptions.opt_track.max_num_tracks = 50000;
-    global_mapper = std::make_shared<glomap::GlobalMapper>(glomapOptions);
+  //   const colmap::Database database(*option_manager_.database_path);
+  //   glomap::ConvertDatabaseToGlomap(database, view_graph, cameras, images);
+  //   std::cout << "glomap mapper start\n";
+  //   //glomapOptions.opt_gp.constraint_type = GlobalPositionerOptions::ONLY_POINTS;
+  //   glomapOptions.opt_track.max_num_tracks = 50000;
+  //   global_mapper = std::make_shared<glomap::GlobalMapper>(glomapOptions);
   
-    global_mapper->Solve(database, view_graph, cameras, images, tracks);
-    ConvertGlomapToColmapReconstructionManager(
-                                reconstruction_manager_,
-                                cameras,
-                                images,
-                                tracks,
-                                *option_manager_.image_path);
-    LOG(INFO) << "Export to COLMAP reconstruction done";
-  }
-  else if(options_.use_hierachy)
+  //   global_mapper->Solve(database, view_graph, cameras, images, tracks);
+  //   ConvertGlomapToColmapReconstructionManager(
+  //                               reconstruction_manager_,
+  //                               cameras,
+  //                               images,
+  //                               tracks,
+  //                               *option_manager_.image_path);
+  //   LOG(INFO) << "Export to COLMAP reconstruction done";
+  // }
+  // else if(options_.use_hierachy)
+  if(options_.use_hierachy)
   { 
     HierarchicalPipeline::Options mapper_options;
     mapper_options.database_path = *option_manager_.database_path;
     mapper_options.image_path = *option_manager_.image_path;
     mapper_options.incremental_options = *option_manager_.mapper;
-    hierarchical_mapper = std::make_shared<HierarchicalPipeline>(
-        mapper_options, reconstruction_manager_);
-    hierarchical_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
-    hierarchical_mapper->Run();
+    hierarchical_mapper =  std::make_unique<ControllerThread<HierarchicalPipeline>>(
+        std::make_shared<HierarchicalPipeline>(
+        mapper_options, reconstruction_manager_));
+    hierarchical_mapper->GetController()->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
+    active_thread_ = hierarchical_mapper.get();
   }
   else
   {
-    incremental_mapper = std::make_shared<IncrementalPipeline>(option_manager_.mapper,
+    incremental_mapper = std::make_unique<ControllerThread<IncrementalPipeline>>(
+        std::make_shared<IncrementalPipeline>(option_manager_.mapper,
                                     *option_manager_.image_path,
                                     *option_manager_.database_path,
-                                    reconstruction_manager_);
-    incremental_mapper->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
-    incremental_mapper->Run();
+                                    reconstruction_manager_));
+    incremental_mapper->GetController()->SetCheckIfStoppedFunc([&]() { return IsStopped(); });
+    active_thread_ = incremental_mapper.get();
   }
+  active_thread_->Start();
+  active_thread_->Wait();
   std::cout << "sparse reconstruction done\n";
-  if( options_.output_sparse_points ){
+  if( options_.output_sparse_points && !IsStopped()){
+    std::cout << "output sparse points\n";
     CreateDirIfNotExists(sparse_path);
     reconstruction_manager_->Write(sparse_path);
     option_manager_.Write(JoinPaths(sparse_path, "project.ini"));
   }
 }
-
+std::unordered_map<point3D_t, struct Point3D> empty_pts;
 const std::unordered_map<point3D_t, struct Point3D>& SparseReconstructionController::Points3D(int id) const
 {
   if( id < reconstruction_manager_->Size()){
     return reconstruction_manager_->Get(id)->Points3D();
   }
-  return {};
+  return empty_pts;
 }
 
 std::unordered_map<camera_t, struct Camera> empty_cams;
