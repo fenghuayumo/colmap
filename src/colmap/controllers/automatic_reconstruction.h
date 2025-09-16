@@ -104,6 +104,9 @@ class AutomaticReconstructionController : public Thread {
     // The number of threads to use in all stages.
     int num_threads = -1;
 
+    // The random seed to use in all stages.
+    int random_seed = -1;
+
     // Whether to use the GPU in feature extraction, feature matching, and
     // bundle adjustment.
     bool use_gpu = true;
@@ -113,8 +116,6 @@ class AutomaticReconstructionController : public Thread {
     // comma, e.g., "0,1,2,3". For single-GPU stages only the first GPU will be
     // used. By default, all available GPUs will be used in all stages.
     std::string gpu_index = "-1";
-
-    bool use_hierachy = true;
   };
 
   AutomaticReconstructionController(
@@ -123,9 +124,6 @@ class AutomaticReconstructionController : public Thread {
 
   void Stop() override;
 
-  int GetSparseReconstructPhase();
-  float GetProgressOnCurrentPhase();
-  int status_phase = 0;
  private:
   void Run() override;
   void RunFeatureExtraction();
@@ -141,9 +139,6 @@ class AutomaticReconstructionController : public Thread {
   std::unique_ptr<Thread> exhaustive_matcher_;
   std::unique_ptr<Thread> sequential_matcher_;
   std::unique_ptr<Thread> vocab_tree_matcher_;
-
-  std::shared_ptr<class IncrementalPipeline> incremental_mapper;
-  std::shared_ptr<class HierarchicalPipeline> hierarchical_mapper;
 };
 
 }  // namespace colmap

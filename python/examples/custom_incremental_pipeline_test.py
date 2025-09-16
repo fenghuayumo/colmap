@@ -31,17 +31,26 @@ def expect_equal_reconstructions(
         assert error.proj_center_error < max_proj_center_error
 
 
+def create_test_options():
+    options = pycolmap.IncrementalPipelineOptions()
+    # Use single thread for deterministic behavior.
+    options.num_threads = 1
+    return options
+
+
 def test_without_noise(tmp_path):
+    pycolmap.set_random_seed(0)
+
     database_path = tmp_path / "database.db"
     image_path = tmp_path / "images"
     image_path.mkdir()
     output_path = tmp_path / "sparse"
     output_path.mkdir()
 
-    with pycolmap.Database(database_path) as database:
+    with pycolmap.Database.open(database_path) as database:
         synthetic_dataset_options = pycolmap.SyntheticDatasetOptions()
-        synthetic_dataset_options.num_cameras = 2
-        synthetic_dataset_options.num_images = 7
+        synthetic_dataset_options.num_cameras_per_rig = 2
+        synthetic_dataset_options.num_frames_per_rig = 7
         synthetic_dataset_options.num_points3D = 50
         synthetic_dataset_options.point2D_stddev = 0
         gt_reconstruction = pycolmap.synthesize_dataset(
@@ -52,6 +61,7 @@ def test_without_noise(tmp_path):
         database_path=database_path,
         image_path=image_path,
         output_path=output_path,
+        options=create_test_options(),
     )
 
     expect_equal_reconstructions(
@@ -64,16 +74,18 @@ def test_without_noise(tmp_path):
 
 
 def test_with_noise(tmp_path):
+    pycolmap.set_random_seed(0)
+
     database_path = tmp_path / "database.db"
     image_path = tmp_path / "images"
     image_path.mkdir()
     output_path = tmp_path / "sparse"
     output_path.mkdir()
 
-    with pycolmap.Database(database_path) as database:
+    with pycolmap.Database.open(database_path) as database:
         synthetic_dataset_options = pycolmap.SyntheticDatasetOptions()
-        synthetic_dataset_options.num_cameras = 2
-        synthetic_dataset_options.num_images = 7
+        synthetic_dataset_options.num_cameras_per_rig = 2
+        synthetic_dataset_options.num_frames_per_rig = 7
         synthetic_dataset_options.num_points3D = 100
         synthetic_dataset_options.point2D_stddev = 0.5
         gt_reconstruction = pycolmap.synthesize_dataset(
@@ -84,6 +96,7 @@ def test_with_noise(tmp_path):
         database_path=database_path,
         image_path=image_path,
         output_path=output_path,
+        options=create_test_options(),
     )
 
     expect_equal_reconstructions(
@@ -96,27 +109,29 @@ def test_with_noise(tmp_path):
 
 
 def test_multi_reconstruction(tmp_path):
+    pycolmap.set_random_seed(0)
+
     database_path = tmp_path / "database.db"
     image_path = tmp_path / "images"
     image_path.mkdir()
     output_path = tmp_path / "sparse"
     output_path.mkdir()
 
-    with pycolmap.Database(database_path) as database:
+    with pycolmap.Database.open(database_path) as database:
         synthetic_dataset_options = pycolmap.SyntheticDatasetOptions()
-        synthetic_dataset_options.num_cameras = 1
-        synthetic_dataset_options.num_images = 5
+        synthetic_dataset_options.num_cameras_per_rig = 1
+        synthetic_dataset_options.num_frames_per_rig = 5
         synthetic_dataset_options.num_points3D = 50
         synthetic_dataset_options.point2D_stddev = 0
         gt_reconstruction1 = pycolmap.synthesize_dataset(
             synthetic_dataset_options, database
         )
-        synthetic_dataset_options.num_images = 4
+        synthetic_dataset_options.num_frames_per_rig = 4
         gt_reconstruction2 = pycolmap.synthesize_dataset(
             synthetic_dataset_options, database
         )
 
-    options = pycolmap.IncrementalPipelineOptions()
+    options = create_test_options()
     options.min_model_size = 4
     custom_incremental_pipeline.main(
         database_path=database_path,
@@ -148,16 +163,18 @@ def test_multi_reconstruction(tmp_path):
 
 
 def test_chained_matches(tmp_path):
+    pycolmap.set_random_seed(0)
+
     database_path = tmp_path / "database.db"
     image_path = tmp_path / "images"
     image_path.mkdir()
     output_path = tmp_path / "sparse"
     output_path.mkdir()
 
-    with pycolmap.Database(database_path) as database:
+    with pycolmap.Database.open(database_path) as database:
         synthetic_dataset_options = pycolmap.SyntheticDatasetOptions()
-        synthetic_dataset_options.num_cameras = 1
-        synthetic_dataset_options.num_images = 4
+        synthetic_dataset_options.num_cameras_per_rig = 1
+        synthetic_dataset_options.num_frames_per_rig = 4
         synthetic_dataset_options.num_points3D = 100
         synthetic_dataset_options.point2D_stddev = 0
         synthetic_dataset_options.match_config = (
@@ -171,6 +188,7 @@ def test_chained_matches(tmp_path):
         database_path=database_path,
         image_path=image_path,
         output_path=output_path,
+        options=create_test_options(),
     )
 
     expect_equal_reconstructions(

@@ -29,7 +29,6 @@
 
 #include "colmap/estimators/absolute_pose.h"
 
-#include "colmap/geometry/pose.h"
 #include "colmap/geometry/rigid3.h"
 #include "colmap/optim/ransac.h"
 #include "colmap/scene/camera.h"
@@ -305,7 +304,7 @@ TEST(AbsolutePose, EPNP_BrokenSolveSignCase) {
 
 TEST(ComputeSquaredReprojectionError, Nominal) {
   const Camera camera = Camera::CreateFromModelId(
-      kInvalidCameraId, CameraModelId::kPinhole, 12, 34, 56);
+      kInvalidCameraId, CameraModelId::kSimplePinhole, 12, 34, 56);
   auto img_from_cam_func =
       std::bind(&Camera::ImgFromCam, &camera, std::placeholders::_1);
 
@@ -318,16 +317,14 @@ TEST(ComputeSquaredReprojectionError, Nominal) {
   std::vector<Point2DWithRay> points2D;
   points2D.push_back(Point2DWithRay{
       Eigen::Vector2d(camera.PrincipalPointX(), camera.PrincipalPointY()),
-  });
+      Eigen::Vector3d::Zero()});
   points2D.push_back(Point2DWithRay{
       Eigen::Vector2d(camera.PrincipalPointX(), camera.PrincipalPointY()),
-  });
-  points2D.push_back(Point2DWithRay{
-      Eigen::Vector2d::Zero(),
-  });
-  points2D.push_back(Point2DWithRay{
-      Eigen::Vector2d::Zero(),
-  });
+      Eigen::Vector3d::Zero()});
+  points2D.push_back(
+      Point2DWithRay{Eigen::Vector2d::Zero(), Eigen::Vector3d::Zero()});
+  points2D.push_back(
+      Point2DWithRay{Eigen::Vector2d::Zero(), Eigen::Vector3d::Zero()});
 
   const Rigid3d cam_from_world(Eigen::Quaterniond::Identity(),
                                Eigen::Vector3d(1, 0, 0));

@@ -32,14 +32,13 @@
 #include "colmap/controllers/feature_extraction.h"
 #include "colmap/controllers/feature_matching.h"
 #include "colmap/controllers/incremental_pipeline.h"
-#include "colmap/controllers/hierarchical_pipeline.h"
 #include "colmap/controllers/option_manager.h"
 #include "colmap/image/undistortion.h"
 #include "colmap/mvs/fusion.h"
 #include "colmap/mvs/meshing.h"
 #include "colmap/mvs/patch_match.h"
+#include "colmap/scene/database.h"
 #include "colmap/util/logging.h"
-#include "colmap/util/misc.h"
 
 namespace colmap {
 
@@ -84,14 +83,20 @@ AutomaticReconstructionController::AutomaticReconstructionController(
     option_manager_.ModifyForExtremeQuality();
   }
 
-  option_manager_.sift_extraction->num_threads = options_.num_threads;
-  option_manager_.sift_matching->num_threads = options_.num_threads;
+  option_manager_.feature_extraction->num_threads = options_.num_threads;
+  option_manager_.feature_matching->num_threads = options_.num_threads;
+  option_manager_.sequential_pairing->num_threads = options_.num_threads;
+  option_manager_.vocab_tree_pairing->num_threads = options_.num_threads;
   option_manager_.mapper->num_threads = options_.num_threads;
   option_manager_.poisson_meshing->num_threads = options_.num_threads;
 
+  option_manager_.two_view_geometry->ransac_options.random_seed =
+      options_.random_seed;
+  option_manager_.mapper->random_seed = options_.random_seed;
+
   ImageReaderOptions& reader_options = *option_manager_.image_reader;
-  reader_options.database_path = *option_manager_.database_path;
   reader_options.image_path = *option_manager_.image_path;
+  reader_options.as_rgb = option_manager_.feature_extraction->RequiresRGB();
   if (!options_.mask_path.empty()) {
     reader_options.mask_path = options_.mask_path;
     option_manager_.image_reader->mask_path = options_.mask_path;
@@ -102,47 +107,49 @@ AutomaticReconstructionController::AutomaticReconstructionController(
   reader_options.camera_model = options_.camera_model;
   reader_options.camera_params = options_.camera_params;
 
-  option_manager_.sift_extraction->use_gpu = options_.use_gpu;
-  option_manager_.sift_matching->use_gpu = options_.use_gpu;
+  option_manager_.feature_extraction->use_gpu = options_.use_gpu;
+  option_manager_.feature_matching->use_gpu = options_.use_gpu;
   option_manager_.mapper->ba_use_gpu = options_.use_gpu;
   option_manager_.bundle_adjustment->use_gpu = options_.use_gpu;
 
-  option_manager_.sift_extraction->gpu_index = options_.gpu_index;
-  option_manager_.sift_matching->gpu_index = options_.gpu_index;
+  option_manager_.feature_extraction->gpu_index = options_.gpu_index;
+  option_manager_.feature_matching->gpu_index = options_.gpu_index;
   option_manager_.patch_match_stereo->gpu_index = options_.gpu_index;
   option_manager_.mapper->ba_gpu_index = options_.gpu_index;
   option_manager_.bundle_adjustment->gpu_index = options_.gpu_index;
 
   if (options_.extraction) {
-    feature_extractor_ = CreateFeatureExtractorController(
-        reader_options, *option_manager_.sift_extraction);
+    feature_extractor_ =
+        CreateFeatureExtractorController(*option_manager_.database_path,
+                                         reader_options,
+                                         *option_manager_.feature_extraction);
   }
 
   if (options_.matching) {
     exhaustive_matcher_ =
-        CreateExhaustiveFeatureMatcher(*option_manager_.exhaustive_matching,
-                                       *option_manager_.sift_matching,
+        CreateExhaustiveFeatureMatcher(*option_manager_.exhaustive_pairing,
+                                       *option_manager_.feature_matching,
                                        *option_manager_.two_view_geometry,
                                        *option_manager_.database_path);
 
     if (!options_.vocab_tree_path.empty()) {
-      option_manager_.sequential_matching->loop_detection = true;
-      option_manager_.sequential_matching->vocab_tree_path =
+      option_manager_.sequential_pairing->loop_detection = true;
+      option_manager_.sequential_pairing->vocab_tree_path =
           options_.vocab_tree_path;
     }
 
     sequential_matcher_ =
-        CreateSequentialFeatureMatcher(*option_manager_.sequential_matching,
-                                       *option_manager_.sift_matching,
+        CreateSequentialFeatureMatcher(*option_manager_.sequential_pairing,
+                                       *option_manager_.feature_matching,
                                        *option_manager_.two_view_geometry,
                                        *option_manager_.database_path);
 
     if (!options_.vocab_tree_path.empty()) {
-      option_manager_.vocab_tree_matching->vocab_tree_path =
+      option_manager_.vocab_tree_pairing->vocab_tree_path =
           options_.vocab_tree_path;
       vocab_tree_matcher_ =
-          CreateVocabTreeFeatureMatcher(*option_manager_.vocab_tree_matching,
-                                        *option_manager_.sift_matching,
+          CreateVocabTreeFeatureMatcher(*option_manager_.vocab_tree_pairing,
+                                        *option_manager_.feature_matching,
                                         *option_manager_.two_view_geometry,
                                         *option_manager_.database_path);
     }
@@ -156,35 +163,22 @@ void AutomaticReconstructionController::Stop() {
   Thread::Stop();
 }
 
-int AutomaticReconstructionController::GetSparseReconstructPhase() {
-  return status_phase;
-}
-
-float AutomaticReconstructionController::GetProgressOnCurrentPhase() {
-  if (status_phase == 1) {
-    return feature_extractor_->GetProgress();
-  } else if (status_phase == 2) {
-    return exhaustive_matcher_->GetProgress();
-  } else if (status_phase == 3) {
-    if(!options_.use_hierachy)
-        return incremental_mapper->GetProgress();
-    return hierarchical_mapper->GetProgress();
-  }
-  return 1.0f;
-}
-
 void AutomaticReconstructionController::Run() {
   if (IsStopped()) {
     return;
   }
 
-  RunFeatureExtraction();
+  if (options_.extraction) {
+    RunFeatureExtraction();
+  }
 
   if (IsStopped()) {
     return;
   }
 
-  RunFeatureMatching();
+  if (options_.matching) {
+    RunFeatureMatching();
+  }
 
   if (IsStopped()) {
     return;
@@ -197,7 +191,7 @@ void AutomaticReconstructionController::Run() {
   if (IsStopped()) {
     return;
   }
-  status_phase = 4;
+
   if (options_.dense) {
     RunDenseMapper();
   }
@@ -208,7 +202,7 @@ void AutomaticReconstructionController::RunFeatureExtraction() {
   active_thread_ = feature_extractor_.get();
   feature_extractor_->Start();
   feature_extractor_->Wait();
-  // feature_extractor_.reset();
+  feature_extractor_.reset();
   active_thread_ = nullptr;
 }
 
@@ -218,8 +212,8 @@ void AutomaticReconstructionController::RunFeatureMatching() {
     matcher = sequential_matcher_.get();
   } else if (options_.data_type == DataType::INDIVIDUAL ||
              options_.data_type == DataType::INTERNET) {
-    Database database(*option_manager_.database_path);
-    const size_t num_images = database.NumImages();
+    auto database = Database::Open(*option_manager_.database_path);
+    const size_t num_images = database->NumImages();
     if (options_.vocab_tree_path.empty() || num_images < 200) {
       matcher = exhaustive_matcher_.get();
     } else {
@@ -231,9 +225,9 @@ void AutomaticReconstructionController::RunFeatureMatching() {
   active_thread_ = matcher;
   matcher->Start();
   matcher->Wait();
-  // exhaustive_matcher_.reset();
-  // sequential_matcher_.reset();
-  // vocab_tree_matcher_.reset();
+  exhaustive_matcher_.reset();
+  sequential_matcher_.reset();
+  vocab_tree_matcher_.reset();
   active_thread_ = nullptr;
 }
 
@@ -253,9 +247,9 @@ void AutomaticReconstructionController::RunSparseMapper() {
   }
 
   IncrementalPipeline mapper(option_manager_.mapper,
-                                     *option_manager_.image_path,
-                                     *option_manager_.database_path,
-                                     reconstruction_manager_);
+                             *option_manager_.image_path,
+                             *option_manager_.database_path,
+                             reconstruction_manager_);
   mapper.SetCheckIfStoppedFunc([&]() { return IsStopped(); });
   mapper.Run();
 

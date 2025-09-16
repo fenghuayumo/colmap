@@ -92,6 +92,7 @@ macro(COLMAP_ADD_LIBRARY)
     target_link_libraries(${COLMAP_ADD_LIBRARY_NAME}
         PRIVATE ${COLMAP_ADD_LIBRARY_PRIVATE_LINK_LIBS}
         PUBLIC ${COLMAP_ADD_LIBRARY_PUBLIC_LINK_LIBS})
+    target_compile_definitions(${COLMAP_ADD_LIBRARY_NAME} PUBLIC ${COLMAP_COMPILE_DEFINITIONS})
 endmacro(COLMAP_ADD_LIBRARY)
 
 # Replacement for the normal add_executable() command. The syntax remains the
@@ -115,6 +116,7 @@ macro(COLMAP_ADD_EXECUTABLE)
         set_target_properties(${COLMAP_ADD_EXECUTABLE_NAME}
             PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-header-filter=.*")
     endif()
+    target_compile_definitions(${COLMAP_ADD_EXECUTABLE_NAME} PRIVATE ${COLMAP_COMPILE_DEFINITIONS})
 endmacro(COLMAP_ADD_EXECUTABLE)
 macro(COLMAP_ADD_DLL)
     set(options)
@@ -132,6 +134,7 @@ macro(COLMAP_ADD_DLL)
         PRIVATE ${COLMAP_ADD_DLL_PRIVATE_LINK_LIBS}
         PUBLIC ${COLMAP_ADD_DLL_PUBLIC_LINK_LIBS})
 endmacro(COLMAP_ADD_DLL)
+
 # Wrapper for test executables.
 macro(COLMAP_ADD_TEST)
     set(options)
@@ -155,5 +158,6 @@ macro(COLMAP_ADD_TEST)
         if(IS_MSVC)
             install(TARGETS ${COLMAP_ADD_TEST_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
         endif()
+        target_compile_definitions(${COLMAP_ADD_TEST_NAME} PRIVATE ${COLMAP_COMPILE_DEFINITIONS})
     endif()
 endmacro(COLMAP_ADD_TEST)

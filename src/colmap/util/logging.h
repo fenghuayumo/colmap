@@ -29,15 +29,13 @@
 
 #pragma once
 
+#include "colmap/util/glog_macros.h"
 #include "colmap/util/string.h"
 
 #include <exception>
-#include <iostream>
 
 #include <glog/logging.h>
-#ifdef _MSC_VER
-#define GLOG_VERSION_MAJOR 1
-#endif
+
 // Option checker macros. In contrast to glog, this function does not abort the
 // program, but simply returns false on failure.
 #define CHECK_OPTION_IMPL(expr) \
@@ -201,7 +199,7 @@ using LogMessageFatalThrowDefault = LogMessageFatalThrow<std::invalid_argument>;
 
 template <typename T>
 T ThrowCheckNotNull(const char* file, int line, const char* names, T&& t) {
-  if (GOOGLE_PREDICT_FALSE(t == nullptr)) {
+  if (COLMAP_PREDICT_FALSE(t == nullptr)) {
     LogMessageFatalThrowDefault(file, line).stream() << names;
   }
   return std::forward<T>(t);

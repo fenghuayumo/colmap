@@ -56,7 +56,6 @@ COLMAP_ADD_LIBRARY(
         colmap_mvs
         colmap_sfm
         Ceres::ceres
-        # Ceres::ceres_cuda_kernels
         Boost::boost
 )
 
@@ -68,5 +67,10 @@ COLMAP_ADD_TEST(
 COLMAP_ADD_TEST(
     NAME incremental_pipeline_test
     SRCS incremental_pipeline_test.cc
+    LINK_LIBS colmap_controllers
+)
+COLMAP_ADD_TEST(
+    NAME image_reader_test
+    SRCS image_reader_test.cc
     LINK_LIBS colmap_controllers
 )

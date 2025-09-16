@@ -53,16 +53,7 @@ auto ColmapSparseReconstruct::getPoints3D(int id) const
 -> std::vector<colmap::SparsePoint> {
   std::vector<colmap::SparsePoint> points;
   if (controller_) {
-      if (option.use_glomap) {
-        for (const auto& [_, p] : controller_->tracks) {
-          colmap::SparsePoint pt;
-          pt.xyz = colmap::vec3<float>{(float)p.xyz(0), (float)p.xyz(1), (float)p.xyz(2)};
-          pt.color =
-              colmap::vec4<unsigned char>{p.color(0), p.color(1), p.color(2),0};
-          points.push_back(pt);
-        }
-      }
-      else if (controller_->NumReconstructions() >= 1) {
+     if (controller_->NumReconstructions() >= 1) {
         const auto& pts = controller_->Points3D(id);
         for (const auto& [_, p] : pts) {
           colmap::SparsePoint pt;
@@ -81,14 +72,7 @@ auto ColmapSparseReconstruct::getCameraTracks(int id) const
 -> std::vector<colmap::CameraTrack> {
   std::vector<colmap::CameraTrack> cameras;
   if (controller_) {
-  
-      if (option.use_glomap) {
-        for (const auto& [_, c] : controller_->cameras) {
-          cameras.push_back(
-              {c.camera_id, (int)c.model_id, c.width, c.height, c.params});
-        }
-      }
-      else if (controller_->NumReconstructions() >= 1) {
+      if (controller_->NumReconstructions() >= 1) {
         const auto& cams = controller_->Cameras(id);
         for (const auto& [_, c] : cams) {
           cameras.push_back(
@@ -103,22 +87,7 @@ auto ColmapSparseReconstruct::getImageTracks(int id) const
     -> std::vector<colmap::ImageTrack> {
     std::vector<colmap::ImageTrack> imgIds;
   if (controller_) {
-      if (option.use_glomap) {
-            for (const auto& [_, img] : controller_->images) {
-            imgIds.push_back({img.image_id, img.file_name, img.camera_id});
-            const auto& camfromWorld = img.cam_from_world;
-            float rotx = camfromWorld.rotation.x();
-            float roty = camfromWorld.rotation.y();
-            float rotz = camfromWorld.rotation.z();
-            float rotw = camfromWorld.rotation.w();
-            float tx = camfromWorld.translation.x();
-            float ty = camfromWorld.translation.y();
-            float tz = camfromWorld.translation.z();
-            imgIds.back().rotation = {rotx, roty,rotz,rotw};
-            imgIds.back().translation = {tx,ty,tz};
-          }
-        }
-        else if (controller_->NumReconstructions() >= 1) {
+        if (controller_->NumReconstructions() >= 1) {
           const auto& imgs = controller_->Images(id);
           for (const auto& [_, img] : imgs) {
             const auto& camfromWorld = img.CamFromWorld();

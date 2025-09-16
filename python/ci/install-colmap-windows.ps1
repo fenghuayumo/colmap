@@ -12,7 +12,6 @@ If (!(Test-Path -path "${COMPILER_TOOLS_DIR}/ccache.exe" -PathType Leaf)) {
 cd ${CURRDIR}
 git clone https://github.com/microsoft/vcpkg ${env:VCPKG_INSTALLATION_ROOT}
 cd ${env:VCPKG_INSTALLATION_ROOT}
-git checkout "${env:VCPKG_COMMIT_ID}"
 ./bootstrap-vcpkg.bat
 
 cd ${CURRDIR}
@@ -25,7 +24,7 @@ cd build
 cmake .. `
     -GNinja `
     -DCMAKE_MAKE_PROGRAM=ninja `
-    -DCUDA_ENABLED="ON" `
+    -DCUDA_ENABLED="OFF" `
     -DGUI_ENABLED="OFF" `
     -DCGAL_ENABLED="OFF" `
     -DLSD_ENABLED="OFF" `

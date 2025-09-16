@@ -28,7 +28,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.12)
 
 ################################################################################
 # Options
@@ -38,11 +38,13 @@ option(SIMD_ENABLED "Whether to enable SIMD optimizations" ON)
 option(OPENMP_ENABLED "Whether to enable OpenMP parallelization" ON)
 option(IPO_ENABLED "Whether to enable interprocedural optimization" ON)
 option(CUDA_ENABLED "Whether to enable CUDA, if available" ON)
-option(GUI_ENABLED "Whether to enable the graphical UI" OFF)
-option(OPENGL_ENABLED "Whether to enable OpenGL, if available" OFF)
+option(GUI_ENABLED "Whether to enable the graphical UI" ON)
+option(OPENGL_ENABLED "Whether to enable OpenGL, if available" ON)
 option(TESTS_ENABLED "Whether to build test binaries" OFF)
 option(COVERAGE_ENABLED "Whether to enable code coverage" OFF)
 option(ASAN_ENABLED "Whether to enable AddressSanitizer flags" OFF)
+option(TSAN_ENABLED "Whether to enable ThreadSanitizer flags" OFF)
+option(UBSAN_ENABLED "Whether to enable UndefinedBehaviorSanitizer flags" OFF)
 option(PROFILING_ENABLED "Whether to enable google-perftools linker flags" OFF)
 option(CCACHE_ENABLED "Whether to enable compiler caching, if available" ON)
 option(CGAL_ENABLED "Whether to enable the CGAL library" ON)
@@ -50,6 +52,7 @@ option(LSD_ENABLED "Whether to enable the LSD library" ON)
 option(DOWNLOAD_ENABLED "Whether to enable (automatic) download of resources (requires Curl/OpenSSL)" ON)
 option(UNINSTALL_ENABLED "Whether to create a target to 'uninstall' colmap" ON)
 option(FETCH_POSELIB "Whether to consume PoseLib using FetchContent or find_package" ON)
+option(FETCH_FAISS "Whether to consume faiss using FetchContent or find_package" ON)
 option(ALL_SOURCE_TARGET "Whether to create a target for all source files (for Visual Studio / XCode development)" OFF)
 
 # Disables default features, as we specify each required feature manually below.
@@ -69,24 +72,17 @@ if(CGAL_ENABLED)
     list(APPEND VCPKG_MANIFEST_FEATURES "cgal")
 endif()
 
-if(LSD_ENABLED)
-    message(STATUS "Enabling LSD support")
-    add_definitions("-DCOLMAP_LSD_ENABLED")
-else()
-    message(STATUS "Disabling LSD support")
-endif()
-
 if(DOWNLOAD_ENABLED)
     list(APPEND VCPKG_MANIFEST_FEATURES "download")
 endif()
 
 project(COLMAP LANGUAGES C CXX)
 
-set(COLMAP_VERSION "3.11.1")
+set(COLMAP_VERSION "3.13.0.dev0")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 set_property(GLOBAL PROPERTY GLOBAL_DEPENDS_NO_CYCLES ON)
@@ -138,10 +134,10 @@ endif()
 
 if(IS_MSVC)
     # Some fixes for the Glog library.
-    add_definitions("-DGLOG_USE_GLOG_EXPORT")
-    add_definitions("-DGLOG_NO_ABBREVIATED_SEVERITIES")
-    add_definitions("-DGL_GLEXT_PROTOTYPES")
-    add_definitions("-DNOMINMAX")
+    add_compile_definitions(GLOG_USE_GLOG_EXPORT)
+    add_compile_definitions(GLOG_NO_ABBREVIATED_SEVERITIES)
+    add_compile_definitions(GL_GLEXT_PROTOTYPES)
+    add_compile_definitions(NOMINMAX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc")
     # Disable warning: 'initializing': conversion from 'X' to 'Y', possible loss of data
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244 /wd4267 /wd4305")
@@ -166,7 +162,7 @@ if(IS_MACOS)
 endif()
 
 if(IS_DEBUG)
-    add_definitions("-DEIGEN_INITIALIZE_MATRICES_BY_NAN")
+    add_compile_definitions(EIGEN_INITIALIZE_MATRICES_BY_NAN)
 endif()
 
 if(SIMD_ENABLED)
@@ -189,6 +185,26 @@ if(ASAN_ENABLED)
         add_link_options(-fsanitize=address)
     else()
         message(FATAL_ERROR "Unsupported compiler for ASan mode")
+    endif()
+endif()
+
+if(TSAN_ENABLED)
+    message(STATUS "Enabling TSan support")
+    if(IS_CLANG OR IS_GNU)
+        add_compile_options(-fsanitize=thread)
+        add_link_options(-fsanitize=thread)
+    else()
+        message(FATAL_ERROR "Unsupported compiler for TSan mode")
+    endif()
+endif()
+
+if(UBSAN_ENABLED)
+    message(STATUS "Enabling UBsan support")
+    if(IS_CLANG OR IS_GNU)
+        add_compile_options(-fsanitize=undefined)
+        add_link_options(-fsanitize=undefined)
+    else()
+        message(FATAL_ERROR "Unsupported compiler for UBsan mode")
     endif()
 endif()
 
@@ -242,7 +258,7 @@ link_directories(${COLMAP_LINK_DIRS})
 
 add_subdirectory(src/colmap)
 add_subdirectory(src/thirdparty)
-add_subdirectory(src/glomap)
+
 ################################################################################
 # Generate source groups for Visual Studio, XCode, etc.
 ################################################################################
@@ -250,7 +266,7 @@ add_subdirectory(src/glomap)
 COLMAP_ADD_SOURCE_DIR(src/colmap/controllers CONTROLLERS_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/estimators ESTIMATORS_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/exe EXE_SRCS *.h *.cc)
-COLMAP_ADD_SOURCE_DIR(src/colmap/dvscolmap DVSCOLMAP_SRCS *.h *.cc *.cpp)
+COLMAP_ADD_SOURCE_DIR(src/colmap/colmap_dvs DVSCOLMAP_SRCS *.h *.cc *.cpp)
 COLMAP_ADD_SOURCE_DIR(src/colmap/feature FEATURE_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/geometry GEOMETRY_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/image IMAGE_SRCS *.h *.cc)
@@ -271,7 +287,7 @@ endif()
 COLMAP_ADD_SOURCE_DIR(src/thirdparty/PoissonRecon THIRDPARTY_POISSON_RECON_SRCS *.h *.cpp *.inl)
 COLMAP_ADD_SOURCE_DIR(src/thirdparty/SiftGPU THIRDPARTY_SIFT_GPU_SRCS *.h *.cpp *.cu)
 COLMAP_ADD_SOURCE_DIR(src/thirdparty/VLFeat THIRDPARTY_VLFEAT_SRCS *.h *.c *.tc)
-COLMAP_ADD_SOURCE_DIR(src/glomap GLOMAP_SRCS *.h *.c *.tc)
+
 # Add all of the source files to a regular library target, as using a custom
 # target does not allow us to set its C++ include directories (and thus
 # intellisense can't find any of the included files).
@@ -297,7 +313,6 @@ if(ALL_SOURCE_TARGET)
         ${THIRDPARTY_POISSON_RECON_SRCS}
         ${THIRDPARTY_SIFT_GPU_SRCS}
         ${THIRDPARTY_VLFEAT_SRCS}
-        ${GLOMAP_SRCS}
     )
 
     if(LSD_ENABLED)
@@ -349,6 +364,7 @@ set(COLMAP_EXPORT_LIBS
     colmap_controllers
     colmap_estimators
     colmap_exe
+    colmap_dvs
     colmap_feature_types
     colmap_feature
     colmap_geometry
@@ -364,7 +380,6 @@ set(COLMAP_EXPORT_LIBS
     # Third-party.
     colmap_poisson_recon
     colmap_vlfeat
-    glomap
 )
 if(LSD_ENABLED)
     list(APPEND COLMAP_EXPORT_LIBS
@@ -391,6 +406,9 @@ endif()
 if(FETCH_POSELIB)
     list(APPEND COLMAP_EXPORT_LIBS PoseLib)
 endif()
+if(FETCH_FAISS)
+    list(APPEND COLMAP_EXPORT_LIBS faiss)
+endif()
 
 # Add unified interface library target to export.
 add_library(colmap INTERFACE)
@@ -406,7 +424,8 @@ install(
     EXPORT colmap-targets
     LIBRARY DESTINATION thirdparty/)
 
-install(TARGETS colmap_dvs LIBRARY DESTINATION lib/)
+# install(TARGETS colmap_dvs LIBRARY DESTINATION lib/)
+
 # Generate config and version.
 include(CMakePackageConfigHelpers)
 set(PACKAGE_CONFIG_FILE "${CMAKE_CURRENT_BINARY_DIR}/colmap-config.cmake")
@@ -437,10 +456,7 @@ install(
     DIRECTORY src/thirdparty
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/colmap
     FILES_MATCHING REGEX ".*[.]h|.*[.]hpp|.*[.]inl")
-install(
-    DIRECTORY src/glomap
-    DESTINATION include/glomap
-    FILES_MATCHING REGEX ".*[.]h|.*[.]hpp|.*[.]inl")
+
 # Install find_package scripts for dependencies.
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cmake

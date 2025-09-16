@@ -8,27 +8,34 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.30")
     cmake_policy(SET CMP0167 NEW)
 endif()
 
+# Track all the compile definitions
+set(COLMAP_COMPILE_DEFINITIONS)
+if(LSD_ENABLED)
+    list(APPEND COLMAP_COMPILE_DEFINITIONS COLMAP_LSD_ENABLED)
+    message(STATUS "Enabling LSD support")
+else()
+    message(STATUS "Disabling LSD support")
+endif()
+
+find_package(OpenMP REQUIRED COMPONENTS C CXX)
 
 find_package(Boost ${COLMAP_FIND_TYPE} COMPONENTS
              graph
              program_options
+             OPTIONAL_COMPONENTS
              system)
 
-find_package(Eigen3 3.4 ${COLMAP_FIND_TYPE})
-# find_package(SuiteSparse COMPONENTS CHOLMOD REQUIRED)
+find_package(Eigen3 ${COLMAP_FIND_TYPE})
 
 find_package(FreeImage ${COLMAP_FIND_TYPE})
-
-find_package(FLANN ${COLMAP_FIND_TYPE})
-find_package(LZ4 ${COLMAP_FIND_TYPE})
 
 find_package(Metis ${COLMAP_FIND_TYPE})
 
 find_package(Glog ${COLMAP_FIND_TYPE})
 if(DEFINED glog_VERSION_MAJOR)
   # Older versions of glog don't export version variables.
-  add_definitions("-DGLOG_VERSION_MAJOR=${glog_VERSION_MAJOR}")
-  add_definitions("-DGLOG_VERSION_MINOR=${glog_VERSION_MINOR}")
+  list(APPEND COLMAP_COMPILE_DEFINITIONS GLOG_VERSION_MAJOR=${glog_VERSION_MAJOR})
+  list(APPEND COLMAP_COMPILE_DEFINITIONS GLOG_VERSION_MINOR=${glog_VERSION_MINOR})
 endif()
 
 find_package(SQLite3 ${COLMAP_FIND_TYPE})
@@ -40,7 +47,7 @@ find_package(Glew ${COLMAP_FIND_TYPE})
 
 find_package(Git)
 
-find_package(Ceres ${COLMAP_FIND_TYPE} COMPONENTS SuiteSparse)
+find_package(Ceres ${COLMAP_FIND_TYPE})
 if(NOT TARGET Ceres::ceres)
     # Older Ceres versions don't come with an imported interface target.
     add_library(Ceres::ceres INTERFACE IMPORTED)
@@ -49,20 +56,9 @@ if(NOT TARGET Ceres::ceres)
     target_link_libraries(
         Ceres::ceres INTERFACE ${CERES_LIBRARIES})
 endif()
-find_package(SuiteSparse COMPONENTS CHOLMOD REQUIRED)
+
 if(TESTS_ENABLED)
     find_package(GTest ${COLMAP_FIND_TYPE})
-endif()
-
-if(OPENMP_ENABLED AND NOT "${CMAKE_BUILD_TYPE}" STREQUAL "ClangTidy")
-    find_package(OpenMP QUIET)
-endif()
-
-if(OPENMP_ENABLED AND OPENMP_FOUND)
-    message(STATUS "Enabling OpenMP support")
-    add_definitions("-DCOLMAP_OPENMP_ENABLED")
-else()
-    message(STATUS "Disabling OpenMP support")
 endif()
 
 if(CGAL_ENABLED)
@@ -73,7 +69,7 @@ if(CGAL_ENABLED)
 endif()
 
 if(CGAL_FOUND)
-    add_definitions("-DCOLMAP_CGAL_ENABLED")
+    list(APPEND COLMAP_COMPILE_DEFINITIONS COLMAP_CGAL_ENABLED)
     list(APPEND CGAL_LIBRARY ${CGAL_LIBRARIES})
     message(STATUS "Found CGAL")
     message(STATUS "  Includes : ${CGAL_INCLUDE_DIRS}")
@@ -115,7 +111,7 @@ if(DOWNLOAD_ENABLED)
     endif()
     if(CURL_FOUND AND CRYPTO_FOUND)
         message(STATUS "Enabling download support")
-        add_definitions("-DCOLMAP_DOWNLOAD_ENABLED")
+        list(APPEND COLMAP_COMPILE_DEFINITIONS COLMAP_DOWNLOAD_ENABLED)
     else()
         set(DOWNLOAD_ENABLED OFF)
         message(STATUS "Disabling download support (Curl/Crypto not found)")
@@ -128,60 +124,52 @@ if(NOT FETCH_POSELIB)
     find_package(PoseLib ${COLMAP_FIND_TYPE})
 endif()
 
+if(NOT FETCH_FAISS)
+    find_package(faiss ${COLMAP_FIND_TYPE})
+endif()
+
 set(COLMAP_LINK_DIRS ${Boost_LIBRARY_DIRS})
 
 set(CUDA_MIN_VERSION "7.0")
 if(CUDA_ENABLED)
-    find_package(CUDAToolkit)
-    if (NOT CUDAToolkit_FOUND)
-        message(WARNING "CUDA toolkit not found, building with CPU support only")
-    else()
-        if (COLMAP_MAX_CUDA_COMPATIBILITY)
-            execute_process(COMMAND "${CUDAToolkit_NVCC_EXECUTABLE}" --list-gpu-arch 
-                OUTPUT_VARIABLE LIST_GPU_ARCH 
-                ERROR_QUIET)
-        endif()
+    if(CMAKE_VERSION VERSION_LESS 3.17)
+        find_package(CUDA QUIET)
+        if(CUDA_FOUND)
+            message(STATUS "Found CUDA version ${CUDA_VERSION} installed in "
+                    "${CUDA_TOOLKIT_ROOT_DIR} via legacy CMake (<3.17) module. "
+                    "Using the legacy CMake module means that any installation of "
+                    "COLMAP will require that the CUDA libraries are "
+                    "available under LD_LIBRARY_PATH.")
+            message(STATUS "Found CUDA ")
+            message(STATUS "  Includes : ${CUDA_INCLUDE_DIRS}")
+            message(STATUS "  Libraries : ${CUDA_LIBRARIES}")
 
-        if(NOT LIST_GPU_ARCH AND COLMAP_MAX_CUDA_COMPATIBILITY)
-            message(WARNING "Cannot compile for max CUDA compatibility, nvcc does not support --list-gpu-arch")
-            SET(COLMAP_MAX_CUDA_COMPATIBILITY OFF)
-        endif()
-        if(NOT COLMAP_MAX_CUDA_COMPATIBILITY)
-            if(NOT CMAKE_CUDA_ARCHITECTURES)
-                SET(CMAKE_CUDA_ARCHITECTURES 70;75;80)
-            endif()
+            enable_language(CUDA)
+
+            macro(declare_imported_cuda_target module)
+                add_library(CUDA::${module} INTERFACE IMPORTED)
+                target_include_directories(
+                    CUDA::${module} INTERFACE ${CUDA_INCLUDE_DIRS})
+                target_link_libraries(
+                    CUDA::${module} INTERFACE ${CUDA_${module}_LIBRARY} ${ARGN})
+            endmacro()
+
+            declare_imported_cuda_target(cudart ${CUDA_LIBRARIES})
+            declare_imported_cuda_target(curand ${CUDA_LIBRARIES})
+            
+            set(CUDAToolkit_VERSION "${CUDA_VERSION_STRING}")
+            set(CUDAToolkit_BIN_DIR "${CUDA_TOOLKIT_ROOT_DIR}/bin")
         else()
-            # Build for maximum compatibility
-            # https://arnon.dk/matching-sm-architectures-arch-and-gencode-for-various-nvidia-cards/
-            set(CMAKE_CUDA_ARCHITECTURES "")
-
-            # Extract list of arch and gencodes
-            string(REPLACE "\r" "" LIST_GPU_ARCH ${LIST_GPU_ARCH})
-            string(REPLACE "\n" ";" LIST_GPU_ARCH ${LIST_GPU_ARCH})
-
-            execute_process(COMMAND "${CUDAToolkit_NVCC_EXECUTABLE}" --list-gpu-code 
-                OUTPUT_VARIABLE LIST_GPU_CODE 
-                ERROR_QUIET)
-            string(REPLACE "\r" "" LIST_GPU_CODE ${LIST_GPU_CODE})
-            string(REPLACE "\n" ";" LIST_GPU_CODE ${LIST_GPU_CODE})
-
-            list(GET LIST_GPU_CODE 0 TARGET_GPU_CODE)
-            set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=${TARGET_GPU_CODE}")
-
-            set(IDX 0)
-            foreach(GPU_ARCH ${LIST_GPU_ARCH})
-                string(REGEX MATCH "compute_([0-9]+)" GPU_ARCH_VERSION "${GPU_ARCH}")
-                list(APPEND CMAKE_CUDA_ARCHITECTURES "${CMAKE_MATCH_1}")
-                list(GET LIST_GPU_CODE ${IDX} GPU_CODE)
-                set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=${GPU_ARCH},code=${GPU_CODE}")
-                math(EXPR IDX "${IDX}+1")
-            endforeach()
-            message("Set CUDA flags: " ${CMAKE_CUDA_FLAGS})
+            message(STATUS "Disabling CUDA support (not found)")
         endif()
-        set(CUDA_FOUND ON)
-        enable_language(CUDA)
-        set(CMAKE_CUDA_STANDARD 17)
-        set(CUDA_STANDARD 17)
+    else()
+        find_package(CUDAToolkit QUIET)
+        if(CUDAToolkit_FOUND)
+            set(CUDA_FOUND ON)
+            enable_language(CUDA)
+        else()
+            message(STATUS "Disabling CUDA support (not found)")
+        endif()
     endif()
 endif()
 
@@ -190,10 +178,13 @@ if(CUDA_ENABLED AND CUDA_FOUND)
         set(CMAKE_CUDA_ARCHITECTURES "native")
     endif()
 
-    add_definitions("-DCOLMAP_CUDA_ENABLED")
+    list(APPEND COLMAP_COMPILE_DEFINITIONS COLMAP_CUDA_ENABLED)
 
     # Do not show warnings if the architectures are deprecated.
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wno-deprecated-gpu-targets")
+    # Suppress warnings related to Eigen:
+    # Calling a constexpr __host__ function from a __host__ __device__ function is not allowed.
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
     # Explicitly set PIC flags for CUDA targets.
     if(NOT IS_MSVC)
         set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --compiler-options -fPIC")
@@ -207,11 +198,19 @@ else()
 endif()
 
 if(GUI_ENABLED)
-    find_package(Qt5 5.4 ${COLMAP_FIND_TYPE} COMPONENTS Core OpenGL Widgets)
+    find_package(QT NAMES Qt5 Qt6 REQUIRED)
+    set(COLMAP_QT_COMPONENTS Core OpenGL Widgets)
+    if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
+        list(APPEND COLMAP_QT_COMPONENTS OpenGLWidgets)
+    endif()
+    find_package(Qt${QT_VERSION_MAJOR} ${COLMAP_FIND_TYPE} ${COLMAP_QT_COMPONENTS})
     message(STATUS "Found Qt")
-    message(STATUS "  Module : ${Qt5Core_DIR}")
-    message(STATUS "  Module : ${Qt5OpenGL_DIR}")
-    message(STATUS "  Module : ${Qt5Widgets_DIR}")
+    message(STATUS "  Module : ${Qt${QT_VERSION_MAJOR}Core_DIR}")
+    message(STATUS "  Module : ${Qt${QT_VERSION_MAJOR}OpenGL_DIR}")
+    message(STATUS "  Module : ${Qt${QT_VERSION_MAJOR}Widgets_DIR}")
+    if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
+        message(STATUS "  Module : ${Qt${QT_VERSION_MAJOR}OpenGLWidgets_DIR}")
+    endif()
     if(Qt5_FOUND)
         # Qt5 was built with -reduce-relocations.
         if(Qt5_POSITION_INDEPENDENT_CODE)
@@ -227,14 +226,16 @@ if(GUI_ENABLED)
                 endif()
             endif()
         endif()
+    endif()
 
+    if(QT_FOUND)
         # Enable automatic compilation of Qt resource files.
         set(CMAKE_AUTORCC ON)
     endif()
 endif()
 
-if(GUI_ENABLED AND Qt5_FOUND)
-    add_definitions("-DCOLMAP_GUI_ENABLED")
+if(GUI_ENABLED AND Qt${QT_VERSION_MAJOR}_FOUND)
+    list(APPEND COLMAP_COMPILE_DEFINITIONS COLMAP_GUI_ENABLED)
     message(STATUS "Enabling GUI support")
 else()
     set(GUI_ENABLED OFF)
@@ -246,7 +247,6 @@ if(OPENGL_ENABLED)
         message(STATUS "Disabling GUI also disables OpenGL")
         set(OPENGL_ENABLED OFF)
     else()
-        add_definitions("-DCOLMAP_OPENGL_ENABLED")
         message(STATUS "Enabling OpenGL support")
     endif()
 else()
@@ -255,7 +255,7 @@ endif()
 
 set(GPU_ENABLED OFF)
 if(OPENGL_ENABLED OR CUDA_ENABLED)
-    add_definitions("-DCOLMAP_GPU_ENABLED")
+    list(APPEND COLMAP_COMPILE_DEFINITIONS COLMAP_GPU_ENABLED)
     message(STATUS "Enabling GPU support (OpenGL: ${OPENGL_ENABLED}, CUDA: ${CUDA_ENABLED})")
     set(GPU_ENABLED ON)
 endif()

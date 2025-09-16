@@ -27,42 +27,63 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include "colmap/sensor/rig_calib.h"
+#include "colmap/feature/extractor.h"
 
-#include <gtest/gtest.h>
+#include "colmap/feature/sift.h"
+#include "colmap/util/misc.h"
 
 namespace colmap {
 namespace {
 
-Rigid3d TestRigid3d() {
-  return Rigid3d(Eigen::Quaterniond::UnitRandom(), Eigen::Vector3d::Random());
-}
-
-TEST(RigCalib, Default) {
-  RigCalib calib;
-  EXPECT_EQ(calib.RigId(), kInvalidRigId);
-  EXPECT_EQ(calib.RefSensorId(), kInvalidSensorId);
-  EXPECT_EQ(calib.NumSensors(), 0);
-}
-
-TEST(RigCalib, SetUp) {
-  RigCalib calib;
-  calib.AddRefSensor(sensor_t(SensorType::IMU, 0));
-  calib.AddSensor(sensor_t(SensorType::IMU, 1), TestRigid3d());
-  calib.AddSensor(sensor_t(SensorType::CAMERA, 0), TestRigid3d());
-  calib.AddSensor(sensor_t(SensorType::CAMERA, 1));  // no input sensor_from_rig
-
-  EXPECT_EQ(calib.NumSensors(), 4);
-  EXPECT_EQ(calib.RefSensorId().type, SensorType::IMU);
-  EXPECT_EQ(calib.RefSensorId().id, 0);
-  EXPECT_TRUE(calib.IsRefSensor(sensor_t(SensorType::IMU, 0)));
-  EXPECT_FALSE(calib.IsRefSensor(sensor_t(SensorType::IMU, 1)));
-  EXPECT_TRUE(calib.HasSensorFromRig(sensor_t(SensorType::IMU, 0)));
-  EXPECT_TRUE(calib.HasSensorFromRig(sensor_t(SensorType::IMU, 1)));
-  EXPECT_TRUE(calib.HasSensorFromRig(sensor_t(SensorType::CAMERA, 0)));
-  EXPECT_FALSE(calib.HasSensorFromRig(sensor_t(SensorType::CAMERA, 1)));
-  EXPECT_TRUE(calib.HasSensor(sensor_t(SensorType::CAMERA, 1)));
+void ThrowUnknownFeatureExtractorType(FeatureExtractorType type) {
+  std::ostringstream error;
+  error << "Unknown feature extractor type: " << type;
+  throw std::runtime_error(error.str());
 }
 
 }  // namespace
+
+FeatureExtractionOptions::FeatureExtractionOptions(FeatureExtractorType type)
+    : type(type), sift(std::make_shared<SiftExtractionOptions>()) {}
+
+bool FeatureExtractionOptions::RequiresRGB() const {
+  switch (type) {
+    case FeatureExtractorType::SIFT:
+      return false;
+    default:
+      ThrowUnknownFeatureExtractorType(type);
+  }
+  return false;
+}
+
+bool FeatureExtractionOptions::Check() const {
+  CHECK_OPTION_GT(max_image_size, 0);
+  if (use_gpu) {
+    CHECK_OPTION_GT(CSVToVector<int>(gpu_index).size(), 0);
+#ifndef COLMAP_GPU_ENABLED
+    LOG(ERROR) << "Cannot use GPU feature Extraction without CUDA or OpenGL "
+                  "support. Set use_gpu or use_gpu to false.";
+    return false;
+#endif
+  }
+  if (type == FeatureExtractorType::SIFT) {
+    return THROW_CHECK_NOTNULL(sift)->Check();
+  } else {
+    LOG(ERROR) << "Unknown feature extractor type: " << type;
+    return false;
+  }
+  return true;
+}
+
+std::unique_ptr<FeatureExtractor> FeatureExtractor::Create(
+    const FeatureExtractionOptions& options) {
+  switch (options.type) {
+    case FeatureExtractorType::SIFT:
+      return CreateSiftFeatureExtractor(options);
+    default:
+      ThrowUnknownFeatureExtractorType(options.type);
+  }
+  return nullptr;
+}
+
 }  // namespace colmap

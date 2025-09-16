@@ -2,10 +2,12 @@
 #pragma once
 
 #include "colmap/controllers/option_manager.h"
+#include "colmap/retrieval/resources.h"
 #include "colmap/scene/reconstruction_manager.h"
+#include "colmap/util/enum_utils.h"
 #include "colmap/util/threading.h"
 #include "colmap/util/controller_thread.h"
-#include "glomap/controllers/global_mapper.h"
+// #include "glomap/controllers/global_mapper.h"
 #include <memory>
 #include <string>
 
@@ -22,11 +24,13 @@ class SparseReconstructionController : public Thread {
 
     // The path to the image folder which are used as input.
     std::string image_path;
-
+    // Optional list of image names to reconstruct. The list must contain the
+    // relative path of the images with respect to the image_path.
+    std::vector<std::string> image_names;
     // The path to the mask folder which are used as input.
     std::string mask_path;
     // The path to the vocabulary tree for feature matching.
-    std::string vocab_tree_path;
+    std::string vocab_tree_path = kDefaultVocabTreeUri;
     // The type of input data used to choose optimal mapper settings.
     DataType data_type = DataType::INDIVIDUAL;
 
@@ -35,7 +39,6 @@ class SparseReconstructionController : public Thread {
 
     // Whether to use shared intrinsics or not.
     bool single_camera = false;
-
     // Whether to use shared intrinsics or not for all images in the same
     // sub-folder.
     bool single_camera_per_folder = false;
@@ -45,9 +48,19 @@ class SparseReconstructionController : public Thread {
 
     // Initial camera params for all images.
     std::string camera_params;
+    // Whether to perform feature extraction.
+    bool extraction = true;
 
+    // Whether to perform feature matching.
+    bool matching = true;
+
+    // Whether to perform sparse mapping.
+    bool sparse = true;
     // The number of threads to use in all stages.
     int num_threads = -1;
+
+    // The random seed to use in all stages.
+    int random_seed = -1;
 
     // Whether to use the GPU in feature extraction and matching.
     bool use_gpu = true;
@@ -56,7 +69,6 @@ class SparseReconstructionController : public Thread {
     // you should separate multiple GPU indices by comma, e.g., "0,1,2,3".
     // By default, all GPUs will be used in all stages.
     std::string gpu_index = "-1";
-
     bool use_hierachy = true;
     bool use_glomapper = false;
     bool output_sparse_points = false;
@@ -78,9 +90,9 @@ class SparseReconstructionController : public Thread {
   float GetProgressOnCurrentPhase();
   int status_phase = 0;
   
-    std::unordered_map<glomap::camera_t, glomap::Camera> cameras;
-    std::unordered_map<glomap::image_t, glomap::Image> images;
-    std::unordered_map<glomap::track_t, glomap::Track> tracks;
+    //std::unordered_map<glomap::camera_t, glomap::Camera> cameras;
+    //std::unordered_map<glomap::image_t, glomap::Image> images;
+    //std::unordered_map<glomap::track_t, glomap::Track> tracks;
  private:
   void Run() override;
   void RunFeatureExtraction();
@@ -95,10 +107,10 @@ class SparseReconstructionController : public Thread {
   std::unique_ptr<Thread> exhaustive_matcher_;
   std::unique_ptr<Thread> sequential_matcher_;
   std::unique_ptr<Thread> vocab_tree_matcher_;
-
+  Thread* matcher;
   std::unique_ptr<ControllerThread<class IncrementalPipeline>> incremental_mapper;
   std::unique_ptr<ControllerThread<class HierarchicalPipeline>> hierarchical_mapper;
-  std::shared_ptr<glomap::GlobalMapper>         global_mapper;
+  // std::shared_ptr<glomap::GlobalMapper>         global_mapper;
 };
 
 }  // namespace colmap

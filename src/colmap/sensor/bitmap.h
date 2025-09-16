@@ -109,7 +109,6 @@ class Bitmap {
   // Check whether image is grey- or colorscale.
   inline bool IsRGB() const;
   inline bool IsGrey() const;
-  // inline bool IsRGBA() const;
 
   // Number of bytes required to store image.
   size_t NumBytes() const;
@@ -150,7 +149,7 @@ class Bitmap {
   bool ExifAltitude(double* altitude) const;
 
   // Read bitmap at given path and convert to grey- or colorscale.
-  bool Read(const std::string& path, bool as_rgb = true, Bitmap* mask = nullptr);
+  bool Read(const std::string& path, bool as_rgb = true);
 
   // Write image to file. Flags can be used to set e.g. the JPEG quality.
   // Consult the FreeImage documentation for all available flags.
@@ -275,7 +274,5 @@ int Bitmap::Channels() const { return channels_; }
 bool Bitmap::IsRGB() const { return channels_ == 3; }
 
 bool Bitmap::IsGrey() const { return channels_ == 1; }
-
-// bool Bitmap::IsRGBA() const { return channels_ == 4; }
 
 }  // namespace colmap

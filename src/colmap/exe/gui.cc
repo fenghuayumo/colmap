@@ -29,6 +29,9 @@
 
 #include "colmap/exe/gui.h"
 
+#if defined(COLMAP_GUI_ENABLED)
+#include "colmap/ui/main_window.h"
+#endif
 #include "colmap/controllers/option_manager.h"
 #include "colmap/util/opengl_utils.h"
 
@@ -50,12 +53,14 @@ int RunGraphicalUserInterface(int argc, char** argv) {
     options.Parse(argc, argv);
   }
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0))
-  QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-  QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-#endif
-
   QApplication app(argc, argv);
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)) && \
+    (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+  app.setAttribute(Qt::AA_EnableHighDpiScaling);
+  app.setAttribute(Qt::AA_UseHighDpiPixmaps);
+#endif
+  app.setAttribute(Qt::AA_DontShowIconsInMenus, false);
 
   colmap::MainWindow main_window(options);
   main_window.show();

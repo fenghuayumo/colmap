@@ -147,6 +147,9 @@ def parse_args() -> argparse.Namespace:
         "--overwrite_database", default=False, action="store_true"
     )
     parser.add_argument(
+        "--overwrite_matches", default=False, action="store_true"
+    )
+    parser.add_argument(
         "--overwrite_reconstruction", default=False, action="store_true"
     )
     parser.add_argument(
@@ -190,6 +193,11 @@ def parse_args() -> argparse.Namespace:
             "Overwriting database also overwrites reconstruction"
         )
         args.overwrite_reconstruction = True
+    if args.overwrite_matches:
+        pycolmap.logging.info(
+            "Overwriting matches also overwrites reconstruction"
+        )
+        args.overwrite_reconstruction = True
     if args.overwrite_reconstruction:
         pycolmap.logging.info(
             "Overwriting reconstruction also overwrites alignment"
@@ -203,32 +211,28 @@ def update_camera_priors_from_sparse_gt(
 ) -> None:
     pycolmap.logging.info("Setting prior cameras from GT")
 
-    database = pycolmap.Database()
-    database.open(database_path)
+    with pycolmap.Database.open(str(database_path)) as database:
+        camera_id_gt_to_camera_id = {}
+        for camera_id_gt, camera_gt in camera_priors_sparse_gt.cameras.items():
+            camera_gt.has_prior_focal_length = True
+            camera_id = database.write_camera(camera_gt)
+            camera_id_gt_to_camera_id[camera_id_gt] = camera_id
 
-    camera_id_gt_to_camera_id = {}
-    for camera_id_gt, camera_gt in camera_priors_sparse_gt.cameras.items():
-        camera_gt.has_prior_focal_length = True
-        camera_id = database.write_camera(camera_gt)
-        camera_id_gt_to_camera_id[camera_id_gt] = camera_id
+        images_gt_by_name = {}
+        for image_gt in camera_priors_sparse_gt.images.values():
+            images_gt_by_name[image_gt.name] = image_gt
 
-    images_gt_by_name = {}
-    for image_gt in camera_priors_sparse_gt.images.values():
-        images_gt_by_name[image_gt.name] = image_gt
-
-    for image in database.read_all_images():
-        if image.name not in images_gt_by_name:
-            pycolmap.logging.warning(
-                f"Not setting prior camera for image {image.name}, "
-                "because it does not exist in GT"
-            )
-            continue
-        image_gt = images_gt_by_name[image.name]
-        camera_id = camera_id_gt_to_camera_id[image_gt.camera_id]
-        image.camera_id = camera_id
-        database.update_image(image)
-
-    database.close()
+        for image in database.read_all_images():
+            if image.name not in images_gt_by_name:
+                pycolmap.logging.warning(
+                    f"Not setting prior camera for image {image.name}, "
+                    "because it does not exist in GT"
+                )
+                continue
+            image_gt = images_gt_by_name[image.name]
+            camera_id = camera_id_gt_to_camera_id[image_gt.camera_id]
+            image.camera_id = camera_id
+            database.update_image(image)
 
 
 def colmap_reconstruction(
@@ -252,6 +256,19 @@ def colmap_reconstruction(
     if sparse_path.exists():
         pycolmap.logging.info("Skipping reconstruction, as it already exists")
         return
+
+    if args.overwrite_matches:
+        subprocess.check_call(
+            [
+                args.colmap_path,
+                "database_cleaner",
+                "--database_path",
+                database_path,
+                "--type",
+                "matches",
+            ],
+            cwd=workspace_path,
+        )
 
     # TODO: Expose automatic reconstruction through pycolmap bindings instead
     # of using the command line interface. One blocker for this is that we
@@ -427,7 +444,13 @@ def process_scene(
                     continue
                 if image.camera_id not in sparse_merged.cameras:
                     sparse_merged.add_camera(image.camera)
+                if image.frame_id not in sparse_merged.frames:
+                    if image.frame.rig_id not in sparse_merged.rigs:
+                        sparse_merged.add_rig(image.frame.rig)
+                    image.frame.reset_rig_ptr()
+                    sparse_merged.add_frame(image.frame)
                 image.reset_camera_ptr()
+                image.reset_frame_ptr()
                 sparse_merged.add_image(image)
 
     if args.error_type == "relative":
@@ -604,11 +627,12 @@ def compute_rel_errors(
             other_image = images[other_image_gt.name]
 
             other_from_this = (
-                other_image.cam_from_world * this_image.cam_from_world.inverse()
+                other_image.cam_from_world()
+                * this_image.cam_from_world().inverse()
             )
             other_from_this_gt = (
-                other_image_gt.cam_from_world
-                * this_image_gt.cam_from_world.inverse()
+                other_image_gt.cam_from_world()
+                * this_image_gt.cam_from_world().inverse()
             )
 
             estimated_from_gt = other_from_this.inverse() * other_from_this_gt
@@ -664,7 +688,7 @@ def compute_abs_errors(
         image = images[image_gt.name]
 
         estimated_from_gt = (
-            image.cam_from_world * image_gt.cam_from_world.inverse()
+            image.cam_from_world() * image_gt.cam_from_world().inverse()
         )
 
         dts[i] = np.linalg.norm(estimated_from_gt.translation)
@@ -793,10 +817,10 @@ def create_result_table(
     size_sep = size_scenes + size_aucs + size_imgs + size_comps + 3
     header = (
         f"{column:=^{size_scenes}} {label:=^{size_aucs}} "
-        f"{"images":=^{size_imgs}} {"components":=^{size_comps}}"
+        f"{'images':=^{size_imgs}} {'components':=^{size_comps}}"
     )
     header += "\n" + " " * (size_scenes + 1)
-    header += " ".join(f'{str(t).rstrip("."):^6}' for t in thresholds)
+    header += " ".join(f"{str(t).rstrip('.'):^6}" for t in thresholds)
     header += "    reg   all  num largest"
     text = [header]
     for dataset, category_metrics in dataset_metrics.items():
