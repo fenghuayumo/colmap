@@ -214,6 +214,7 @@ void HierarchicalPipeline::Run() {
       };
 
   // Start reconstructing the bigger clusters first for better resource usage.
+  // NOLINTNEXTLINE(bugprone-nondeterministic-pointer-iteration-order)
   std::sort(leaf_clusters.begin(),
             leaf_clusters.end(),
             [](const SceneClustering::Cluster* cluster1,

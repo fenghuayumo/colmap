@@ -359,7 +359,7 @@ Image ReadImageRow(sqlite3_stmt* sql_stmt) {
 void WriteRigSensors(const rig_t rig_id,
                      const Rig& rig,
                      sqlite3_stmt* sql_stmt) {
-  for (const auto& [sensor_id, sensor_from_rig] : rig.Sensors()) {
+  for (const auto& [sensor_id, sensor_from_rig] : rig.NonRefSensors()) {
     Sqlite3StmtContext context(sql_stmt);
 
     SQLITE3_CALL(sqlite3_bind_int64(sql_stmt, 1, rig_id));
@@ -403,29 +403,6 @@ void WriteFrameData(const frame_t frame_id,
         sql_stmt, 4, static_cast<sqlite3_int64>(data_id.sensor_id.type)));
     SQLITE3_CALL(sqlite3_step(sql_stmt));
   }
-}
-
- #ifdef _WIN32
- #include <Windows.h>
- #endif
-inline std::string multibyte_to_utf8(const std::string& mb_str) {
-#ifdef _WIN32
-  int len = MultiByteToWideChar(CP_ACP, 0, mb_str.c_str(), -1, nullptr, 0);
-  std::wstring wide_str(len, 0);
-  MultiByteToWideChar(CP_ACP, 0, mb_str.c_str(), -1, &wide_str[0], len);
-
-  len = WideCharToMultiByte(
-      CP_UTF8, 0, wide_str.c_str(), -1, nullptr, 0, nullptr, nullptr);
-  std::string utf8_str(len, 0);
-  WideCharToMultiByte(
-      CP_UTF8, 0, wide_str.c_str(), -1, &utf8_str[0], len, nullptr, nullptr);
-  if (utf8_str[len - 1] == 0) {
-    utf8_str = utf8_str.substr(0, len - 1);
-  }
-  return utf8_str;
-#else
-  return mb_str;
-#endif
 }
 
 class SqliteDatabase : public Database {
@@ -1443,7 +1420,7 @@ class SqliteDatabase : public Database {
             ref_sensor_id.id = new_camera_ids.at(ref_sensor_id.id);
           }
           updated_rig.AddRefSensor(ref_sensor_id);
-          for (const auto& [sensor_id, sensor_from_rig] : rig.Sensors()) {
+          for (const auto& [sensor_id, sensor_from_rig] : rig.NonRefSensors()) {
             sensor_t updated_sensor_id = sensor_id;
             if (sensor_id.type == SensorType::CAMERA) {
               updated_sensor_id.id = new_camera_ids.at(sensor_id.id);
@@ -1600,11 +1577,11 @@ class SqliteDatabase : public Database {
   void PrepareSQLStatements() {
     sql_stmts_.clear();
 
-    auto prepare_sql_stmt = [this](const std::string_view sql,
+    auto prepare_sql_stmt = [this](const std::string& sql,
                                    sqlite3_stmt** sql_stmt) {
       THROW_CHECK_NOTNULL(database_);
       VLOG(3) << "Preparing SQL statement: " << sql;
-      SQLITE3_CALL(sqlite3_prepare_v2(database_, sql.data(), -1, sql_stmt, 0));
+      SQLITE3_CALL(sqlite3_prepare_v2(database_, sql.c_str(), -1, sql_stmt, 0));
       sql_stmts_.push_back(sql_stmt);
     };
 

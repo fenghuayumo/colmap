@@ -329,8 +329,8 @@ std::vector<std::pair<image_t, image_t>> VocabTreePairGenerator::Next() {
   }
 
   LOG(INFO) << StringPrintf(
-      "Processing image [%d/%d]", result_idx_ + 1, query_image_ids_.size());
-  progress_ = static_cast<float>(result_idx_) / static_cast<float>(query_image_ids_.size());
+      "Matching image [%d/%d]", result_idx_ + 1, query_image_ids_.size());
+
   // Push the next image to the retrieval queue.
   if (query_idx_ < query_image_ids_.size()) {
     thread_pool_.AddTask(
@@ -468,8 +468,8 @@ std::vector<std::pair<image_t, image_t>> SequentialPairGenerator::Next() {
     return image_pairs_;
   }
   LOG(INFO) << StringPrintf(
-      "Processing image [%d/%d]", image_idx_ + 1, image_ids_.size());
-  progress_ = static_cast<float>(image_idx_) / static_cast<float>(image_ids_.size());
+      "Matching image [%d/%d]", image_idx_ + 1, image_ids_.size());
+
   const auto image_id1 = image_ids_.at(image_idx_);
 
   // If image is part of a rig, then pair the other images in the same frame.
