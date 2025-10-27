@@ -152,7 +152,7 @@ void OptionManager::ModifyForMediumQuality() {
 }
 
 void OptionManager::ModifyForHighQuality() {
-  feature_extraction->sift->estimate_affine_shape = true;
+  //feature_extraction->sift->estimate_affine_shape = true;
   feature_extraction->max_image_size = 2400;
   feature_extraction->sift->max_num_features = 8192;
   feature_matching->guided_matching = true;

@@ -219,7 +219,7 @@ void SparseReconstructionController::RunFeatureMatching() {
              options_.data_type == DataType::INTERNET) {
     auto database = Database::Open(*option_manager_.database_path);
     const size_t num_images = database->NumImages();
-    if (options_.vocab_tree_path.empty() || num_images < 200) {
+    if (options_.vocab_tree_path.empty() || num_images < 300) {
       matcher = exhaustive_matcher_.get();
     } else {
       matcher = vocab_tree_matcher_.get();
