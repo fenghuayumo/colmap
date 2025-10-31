@@ -128,6 +128,9 @@ void OptionManager::ModifyForLowQuality() {
   patch_match_stereo->geom_consistency = false;
   stereo_fusion->check_num_images /= 2;
   stereo_fusion->max_image_size = 1000;
+  mapper->mapper.ba_global_ignore_redundant_points3D = true;
+  mapper->mapper
+      .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
 }
 
 void OptionManager::ModifyForMediumQuality() {
@@ -149,22 +152,26 @@ void OptionManager::ModifyForMediumQuality() {
   patch_match_stereo->geom_consistency = false;
   stereo_fusion->check_num_images /= 1.5;
   stereo_fusion->max_image_size = 1600;
+  mapper->mapper.ba_global_ignore_redundant_points3D = true;
+  mapper->mapper
+      .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
 }
 
 void OptionManager::ModifyForHighQuality() {
   //feature_extraction->sift->estimate_affine_shape = true;
-  feature_extraction->max_image_size = 2400;
+  feature_extraction->max_image_size = 2048;
   feature_extraction->sift->max_num_features = 8192;
   feature_matching->guided_matching = true;
   vocab_tree_pairing->max_num_features = 4096;
-  mapper->ba_local_max_num_iterations = 30;
-  mapper->ba_local_max_refinements = 3;
-  mapper->ba_global_max_num_iterations = 75;
+  mapper->ba_local_max_num_iterations = 20;
+  mapper->ba_local_max_refinements = 2;
+  mapper->ba_global_max_refinements = 3;
+  mapper->ba_global_max_num_iterations = 40;
   mapper->mapper.ba_global_ignore_redundant_points3D = true;
   mapper->mapper
       .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
-  patch_match_stereo->max_image_size = 2400;
-  stereo_fusion->max_image_size = 2400;
+  patch_match_stereo->max_image_size = 2048;
+  stereo_fusion->max_image_size = 2048;
 }
 
 void OptionManager::ModifyForExtremeQuality() {
@@ -174,7 +181,7 @@ void OptionManager::ModifyForExtremeQuality() {
   feature_matching->guided_matching = true;
   mapper->ba_local_max_num_iterations = 40;
   mapper->ba_local_max_refinements = 3;
-  mapper->ba_global_max_num_iterations = 100;
+  mapper->ba_global_max_num_iterations = 50;
   mapper->mapper.ba_global_ignore_redundant_points3D = true;
   mapper->mapper
       .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
