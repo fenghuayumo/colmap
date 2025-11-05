@@ -28,6 +28,7 @@ auto ColmapSparseReconstruct::run() ->bool
     _option.single_camera = option.single_camera;
     _option.data_type = option.video ? colmap::SparseReconstructionController::DataType::VIDEO :
         colmap::SparseReconstructionController::DataType::INDIVIDUAL;
+    _option.mask_path = option.mask_path;
     std::shared_ptr<colmap::ReconstructionManager> reconstruction_manager_ =
         std::make_shared<colmap::ReconstructionManager>();
 
@@ -38,7 +39,7 @@ auto ColmapSparseReconstruct::run() ->bool
         controller_->Wait();
     }
     catch (...){
-        std::cout << "colmap handle throw a exception !!\n";
+        std::cout << "sfm throw a exception !!\n";
         return false;
     }
     if(controller_->GetSparseReconstructPhase() != 4) return false;

@@ -369,6 +369,7 @@ void VocabTreePairGenerator::IndexImages(
     timer.Start();
     LOG(INFO) << StringPrintf(
         "Indexing image [%d/%d]", i + 1, image_ids.size());
+    progress_ = (static_cast<float>(i) / static_cast<float>(image_ids.size()));
     auto keypoints = *cache_->GetKeypoints(image_ids[i]);
     auto descriptors = *cache_->GetDescriptors(image_ids[i]);
     if (options_.max_num_features > 0 &&

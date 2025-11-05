@@ -159,7 +159,7 @@ void OptionManager::ModifyForMediumQuality() {
 
 void OptionManager::ModifyForHighQuality() {
   //feature_extraction->sift->estimate_affine_shape = true;
-  feature_extraction->max_image_size = 2048;
+  feature_extraction->max_image_size = 1600;
   feature_extraction->sift->max_num_features = 8192;
   feature_matching->guided_matching = true;
   vocab_tree_pairing->max_num_features = 4096;
@@ -170,13 +170,14 @@ void OptionManager::ModifyForHighQuality() {
   mapper->mapper.ba_global_ignore_redundant_points3D = true;
   mapper->mapper
       .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
-  patch_match_stereo->max_image_size = 2048;
-  stereo_fusion->max_image_size = 2048;
+  patch_match_stereo->max_image_size = 1600;
+  stereo_fusion->max_image_size = 1600;
 }
 
 void OptionManager::ModifyForExtremeQuality() {
   // Most of the options are set to extreme quality by default.
   feature_extraction->sift->estimate_affine_shape = true;
+  feature_extraction->max_image_size = 2400;
   feature_extraction->sift->domain_size_pooling = true;
   feature_matching->guided_matching = true;
   mapper->ba_local_max_num_iterations = 40;
