@@ -669,6 +669,7 @@ void OptionManager::AddMapperOptions() {
                    &mapper_constant_rig_list_path_);
   AddDefaultOption("Mapper.constant_camera_list_path",
                    &mapper_constant_camera_list_path_);
+  AddDefaultOption("Mapper.max_runtime_seconds", &mapper->max_runtime_seconds);
 
   AddDefaultOption("Mapper.image_list_path", &mapper_image_list_path_);
   AddDefaultOption("Mapper.constant_rig_list_path",
@@ -946,7 +947,7 @@ bool OptionManager::Check() {
   return success;
 }
 
-void OptionManager::Parse(const int argc, char** argv) {
+bool OptionManager::Parse(const int argc, char** argv) {
   config::variables_map vmap;
 
   try {
@@ -966,8 +967,7 @@ void OptionManager::Parse(const int argc, char** argv) {
     if (vmap.count("project_path")) {
       *project_path = vmap["project_path"].as<std::string>();
       if (!Read(*project_path)) {
-        // NOLINTNEXTLINE(concurrency-mt-unsafe)
-        exit(EXIT_FAILURE);
+        return false;
       }
     } else {
       vmap.notify();
@@ -994,19 +994,18 @@ void OptionManager::Parse(const int argc, char** argv) {
     }
   } catch (std::exception& exc) {
     LOG(ERROR) << "Failed to parse options - " << exc.what() << ".";
-    // NOLINTNEXTLINE(concurrency-mt-unsafe)
-    exit(EXIT_FAILURE);
+    return false;
   } catch (...) {
     LOG(ERROR) << "Failed to parse options for unknown reason.";
-    // NOLINTNEXTLINE(concurrency-mt-unsafe)
-    exit(EXIT_FAILURE);
+    return false;
   }
 
   if (!Check()) {
     LOG(ERROR) << "Invalid options provided.";
-    // NOLINTNEXTLINE(concurrency-mt-unsafe)
-    exit(EXIT_FAILURE);
+    return false;
   }
+
+  return true;
 }
 
 bool OptionManager::Read(const std::string& path) {
