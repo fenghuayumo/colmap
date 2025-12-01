@@ -105,6 +105,11 @@ class IncrementalTriangulator {
   // in the associated reconstruction.
   size_t TriangulateImage(const Options& options, image_t image_id);
 
+  // Triangulate observations of multiple images in parallel.
+  // This is more efficient than calling TriangulateImage multiple times.
+  size_t TriangulateImages(const Options& options, 
+                          const std::vector<image_t>& image_ids);
+
   // Complete triangulations for image. Tries to create new tracks for not
   // yet triangulated observations and tries to complete existing tracks.
   // Returns the number of completed observations.

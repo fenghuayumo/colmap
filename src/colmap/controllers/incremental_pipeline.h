@@ -81,6 +81,15 @@ struct IncrementalPipelineOptions {
   // The number of threads to use during reconstruction.
   int num_threads = -1;
 
+  // Number of images to register in a batch before running BA
+  int batch_registration_size = 3;
+
+  // Enable smart BA skipping for well-constrained images
+  bool enable_smart_ba_skipping = true;
+
+  // Minimum observation ratio to skip local BA
+  double smart_ba_skip_observation_ratio = 0.75;
+
   // PRNG seed for all stochastic methods during reconstruction.
   int random_seed = -1;
 

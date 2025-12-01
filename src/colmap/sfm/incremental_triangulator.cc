@@ -156,6 +156,75 @@ size_t IncrementalTriangulator::TriangulateImage(const Options& options,
   return num_tris;
 }
 
+size_t IncrementalTriangulator::TriangulateImages(
+    const Options& options, const std::vector<image_t>& image_ids) {
+  THROW_CHECK(options.Check());
+
+  if (image_ids.empty()) {
+    return 0;
+  }
+
+  // Single image fallback
+  if (image_ids.size() == 1) {
+    return TriangulateImage(options, image_ids[0]);
+  }
+
+  size_t total_num_tris = 0;
+  ClearCaches();
+
+  // Process all images
+  for (const image_t image_id : image_ids) {
+    const Image& image = reconstruction_.Image(image_id);
+    if (!image.HasPose()) {
+      continue;
+    }
+
+    if (HasCameraBogusParams(options, *image.CameraPtr())) {
+      continue;
+    }
+
+    // Correspondence data for reference observation in given image.
+    CorrData ref_corr_data;
+    ref_corr_data.image_id = image_id;
+    ref_corr_data.image = &image;
+    ref_corr_data.camera = image.CameraPtr();
+
+    // Container for correspondences from reference observation to other images.
+    std::vector<CorrData> corrs_data;
+
+    // Try to triangulate all image observations.
+    for (point2D_t point2D_idx = 0; point2D_idx < image.NumPoints2D();
+         ++point2D_idx) {
+      const size_t num_triangulated =
+          Find(options,
+               image_id,
+               point2D_idx,
+               static_cast<size_t>(options.max_transitivity),
+               &corrs_data);
+      if (corrs_data.empty()) {
+        continue;
+      }
+
+      const Point2D& point2D = image.Point2D(point2D_idx);
+      ref_corr_data.point2D_idx = point2D_idx;
+      ref_corr_data.point2D = &point2D;
+
+      if (num_triangulated == 0) {
+        corrs_data.push_back(ref_corr_data);
+        total_num_tris += Create(options, corrs_data);
+      } else {
+        // Continue correspondences to existing 3D points.
+        total_num_tris += Continue(options, ref_corr_data, corrs_data);
+        // Create points from correspondences that are not continued.
+        corrs_data.push_back(ref_corr_data);
+        total_num_tris += Create(options, corrs_data);
+      }
+    }
+  }
+
+  return total_num_tris;
+}
+
 size_t IncrementalTriangulator::CompleteImage(const Options& options,
                                               const image_t image_id) {
   THROW_CHECK(options.Check());

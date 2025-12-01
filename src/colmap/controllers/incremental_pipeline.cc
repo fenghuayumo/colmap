@@ -417,6 +417,8 @@ IncrementalPipeline::Status IncrementalPipeline::ReconstructSubModel(
 
   bool reg_next_success = true;
   bool prev_reg_next_success = true;
+  std::vector<image_t> batch_registered_images;
+  
   do {
     if (CheckIfStopped() || ReachedMaxRuntime()) {
       break;
@@ -433,16 +435,26 @@ IncrementalPipeline::Status IncrementalPipeline::ReconstructSubModel(
     }
 
     image_t next_image_id;
+    size_t num_visible_points = 0;
+    size_t num_observations = 0;
+    
     for (size_t reg_trial = 0; reg_trial < next_images.size(); ++reg_trial) {
       next_image_id = next_images[reg_trial];
 
       LOG(INFO) << StringPrintf("Registering image #%d (num_reg_frames=%d)",
                                 next_image_id,
                                 reconstruction->NumRegFrames());
+      
+      // Get observation statistics once and reuse
+      num_visible_points = 
+          mapper.ObservationManager().NumVisiblePoints3D(next_image_id);
+      num_observations = 
+          mapper.ObservationManager().NumObservations(next_image_id);
+      
       LOG(INFO) << StringPrintf(
           "=> Image sees %d / %d points",
-          mapper.ObservationManager().NumVisiblePoints3D(next_image_id),
-          mapper.ObservationManager().NumObservations(next_image_id));
+          num_visible_points,
+          num_observations);
 
       reg_next_success =
           mapper.RegisterNextImage(mapper_options, next_image_id);
@@ -465,18 +477,63 @@ IncrementalPipeline::Status IncrementalPipeline::ReconstructSubModel(
 
     if (reg_next_success) {
       const Image& image = reconstruction->Image(next_image_id);
+      
+      // Collect image IDs for batch triangulation
+      std::vector<image_t> triangulation_image_ids;
       for (const data_t& data_id : image.FramePtr()->ImageIds()) {
-        mapper.TriangulateImage(options_->Triangulation(), data_id.id);
+        triangulation_image_ids.push_back(data_id.id);
       }
-      mapper.IterativeLocalRefinement(options_->ba_local_max_refinements,
-                                      options_->ba_local_max_refinement_change,
-                                      mapper_options,
-                                      options_->LocalBundleAdjustment(),
-                                      options_->Triangulation(),
-                                      next_image_id);
+      
+      // Use batch triangulation for better cache locality
+      if (triangulation_image_ids.size() > 1) {
+        mapper.Triangulator().TriangulateImages(
+            options_->Triangulation(), triangulation_image_ids);
+      } else if (!triangulation_image_ids.empty()) {
+        mapper.TriangulateImage(
+            options_->Triangulation(), triangulation_image_ids[0]);
+      }
+      
+      batch_registered_images.push_back(next_image_id);
+      
+      // Check if we should skip local BA for this image (smart BA skipping)
+      // Use pre-computed observation statistics
+      bool should_skip_ba = false;
+      if (options_->enable_smart_ba_skipping && 
+          reconstruction->NumRegFrames() >= 50 && 
+          num_observations > 0) {
+        const double observation_ratio = 
+            static_cast<double>(num_visible_points) / num_observations;
+        should_skip_ba = observation_ratio > 
+            options_->smart_ba_skip_observation_ratio;
+        
+        if (should_skip_ba) {
+          LOG(INFO) << StringPrintf(
+              "=> Skipping local BA (obs_ratio=%.3f)", 
+              observation_ratio);
+        }
+      }
+      
+      // Perform BA when batch is full or BA cannot be skipped
+      const bool batch_full = 
+          batch_registered_images.size() >= 
+          static_cast<size_t>(options_->batch_registration_size);
+      
+      if (!should_skip_ba && (batch_full || !options_->enable_smart_ba_skipping)) {
+        // Perform local refinement for the last registered image in batch
+        mapper.IterativeLocalRefinement(options_->ba_local_max_refinements,
+                                        options_->ba_local_max_refinement_change,
+                                        mapper_options,
+                                        options_->LocalBundleAdjustment(),
+                                        options_->Triangulation(),
+                                        next_image_id);
+        batch_registered_images.clear();
+      }
 
       if (CheckRunGlobalRefinement(
               *reconstruction, ba_prev_num_reg_frames, ba_prev_num_points)) {
+        // Clear batch before global BA
+        batch_registered_images.clear();
+        
         IterativeGlobalRefinement(*options_, mapper_options, mapper);
         ba_prev_num_points = reconstruction->NumPoints3D();
         ba_prev_num_reg_frames = reconstruction->NumRegFrames();
@@ -508,6 +565,7 @@ IncrementalPipeline::Status IncrementalPipeline::ReconstructSubModel(
     // bundle adjustment and try again to register one image. If this fails
     // once, then exit the incremental mapping.
     if (!reg_next_success && prev_reg_next_success) {
+      batch_registered_images.clear();
       IterativeGlobalRefinement(*options_, mapper_options, mapper);
     }
     progress_ = float(reconstruction->NumRegImages())/ reconstruction->NumImages();
