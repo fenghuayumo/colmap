@@ -64,15 +64,24 @@ void TriangulationEstimator::Estimate(const std::vector<X_t>& point_data,
                          pose_data[1].cam_from_world,
                          point_data[0].cam_point,
                          point_data[1].cam_point,
-                         &xyz) &&
-        HasPointPositiveDepth(pose_data[0].cam_from_world, xyz) &&
-        HasPointPositiveDepth(pose_data[1].cam_from_world, xyz) &&
-        CalculateTriangulationAngle(pose_data[0].proj_center,
-                                    pose_data[1].proj_center,
-                                    xyz) >= min_tri_angle_) {
-      models->resize(1);
-      (*models)[0] = xyz;
-      return;
+                         &xyz)) {
+      // Check depth constraint. Panoramic cameras can see 360 degrees,
+      // so we skip the positive depth check for them.
+      const bool depth_ok_0 =
+          pose_data[0].camera->model_id == CameraModelId::kPanoramic ||
+          HasPointPositiveDepth(pose_data[0].cam_from_world, xyz);
+      const bool depth_ok_1 =
+          pose_data[1].camera->model_id == CameraModelId::kPanoramic ||
+          HasPointPositiveDepth(pose_data[1].cam_from_world, xyz);
+
+      if (depth_ok_0 && depth_ok_1 &&
+          CalculateTriangulationAngle(pose_data[0].proj_center,
+                                      pose_data[1].proj_center,
+                                      xyz) >= min_tri_angle_) {
+        models->resize(1);
+        (*models)[0] = xyz;
+        return;
+      }
     }
   } else {
     // Multi-view triangulation.
@@ -96,8 +105,11 @@ void TriangulationEstimator::Estimate(const std::vector<X_t>& point_data,
     }
 
     // Check for cheirality constraint.
+    // Panoramic cameras can see 360 degrees, so we skip the positive depth
+    // check for them.
     for (const auto& pose : pose_data) {
-      if (!HasPointPositiveDepth(pose.cam_from_world, xyz)) {
+      if (pose.camera->model_id != CameraModelId::kPanoramic &&
+          !HasPointPositiveDepth(pose.cam_from_world, xyz)) {
         return;
       }
     }

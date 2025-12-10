@@ -306,6 +306,20 @@ TwoViewGeometry EstimateTwoViewGeometry(
     FilterStationaryMatches(
         options.stationary_matches_max_error, points1, points2, &matches);
   }
+
+  // Panoramic cameras have known projection models and should always use
+  // calibrated geometry estimation. When using panoramic cameras, all cameras
+  // must be either panoramic or have prior focal length.
+  if (camera1.model_id == CameraModelId::kPanoramic ||
+      camera2.model_id == CameraModelId::kPanoramic) {
+    THROW_CHECK(camera1.model_id == CameraModelId::kPanoramic ||
+                camera1.has_prior_focal_length);
+    THROW_CHECK(camera2.model_id == CameraModelId::kPanoramic ||
+                camera2.has_prior_focal_length);
+    return EstimateCalibratedTwoViewGeometry(
+        camera1, points1, camera2, points2, matches, options);
+  }
+
   if (options.multiple_models) {
     TwoViewGeometryOptions multiple_model_options = options;
     // Set to false to prevent recursive calls to this function.

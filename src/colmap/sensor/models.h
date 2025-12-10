@@ -95,7 +95,8 @@ MAKE_ENUM_CLASS_OVERLOAD_STREAM(CameraModelId,
                                 kSimpleRadialFisheye,    // = 8
                                 kRadialFisheye,          // = 9
                                 kThinPrismFisheye,       // = 10
-                                kRadTanThinPrismFisheye  // = 11
+                                kRadTanThinPrismFisheye, // = 11
+                                kPanoramic               // = 12
 );
 
 #ifndef CAMERA_MODEL_DEFINITIONS
@@ -151,7 +152,8 @@ MAKE_ENUM_CLASS_OVERLOAD_STREAM(CameraModelId,
   CAMERA_MODEL_CASE(FullOpenCVCameraModel)          \
   CAMERA_MODEL_CASE(FOVCameraModel)                 \
   CAMERA_MODEL_CASE(ThinPrismFisheyeCameraModel)    \
-  CAMERA_MODEL_CASE(RadTanThinPrismFisheyeModel)
+  CAMERA_MODEL_CASE(RadTanThinPrismFisheyeModel)    \
+  CAMERA_MODEL_CASE(PanoramicCameraModel)
 #endif
 
 #ifndef CAMERA_MODEL_SWITCH_CASES
@@ -461,6 +463,25 @@ struct RadTanThinPrismFisheyeModel
                            2,
                            12)
   FISHEYE_CAMERA_MODEL_DEFINITIONS
+};
+
+// Panoramic camera model with 360° view using equirectangular projection.
+//
+// This camera model uses equirectangular projection to map 360 degree images
+// to a 2D plane. The projection converts between 3D rays and latitude/longitude
+// coordinates on a sphere.
+//
+// This camera model is described in:
+//   https://en.wikipedia.org/wiki/Equirectangular_projection
+//
+// Parameter list is expected in the following order:
+//
+//    f, cx, cy
+//
+// where f is a scaling factor (typically height/π for full vertical FOV).
+//
+struct PanoramicCameraModel : public BaseCameraModel<PanoramicCameraModel> {
+  CAMERA_MODEL_DEFINITIONS(CameraModelId::kPanoramic, "PANORAMIC", 1, 2, 0)
 };
 
 // Check whether camera model with given name or identifier exists.
@@ -1842,6 +1863,89 @@ void RadTanThinPrismFisheyeModel::Distortion(
   *du = x_distorted - u;
   *dv = y_distorted - v;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// PanoramicCameraModel
+
+std::string PanoramicCameraModel::InitializeParamsInfo() {
+  return "f, cx, cy";
+}
+
+std::array<size_t, 1> PanoramicCameraModel::InitializeFocalLengthIdxs() {
+  return {0};
+}
+
+std::array<size_t, 2> PanoramicCameraModel::InitializePrincipalPointIdxs() {
+  return {1, 2};
+}
+
+std::array<size_t, 0> PanoramicCameraModel::InitializeExtraParamsIdxs() {
+  return {};
+}
+
+std::vector<double> PanoramicCameraModel::InitializeParams(
+    const double focal_length, const size_t width, const size_t height) {
+  return {height / M_PI, width / 2.0, height / 2.0};
+}
+
+template <typename T>
+bool PanoramicCameraModel::ImgFromCam(
+    const T* params, const T& u, const T& v, const T& w, T* x, T* y) {
+  const T f = params[0];
+  const T c1 = params[1];
+  const T c2 = params[2];
+
+  // Convert 3D point to spherical coordinates
+  // lon = atan2(u, w) maps to horizontal angle
+  // lat = atan2(v, hypot(u, w)) maps to vertical angle
+  const T lon = ceres::atan2(u, w);
+  const T lat = ceres::atan2(v, ceres::hypot(u, w));
+
+  // Map to image coordinates
+  *x = lon * f + c1;
+  *y = lat * f + c2;
+
+  return true;
+}
+
+bool PanoramicCameraModel::CamFromImg(
+    const double* params, double x, double y, double* u, double* v) {
+  const double f = params[0];
+  const double c1 = params[1];
+  const double c2 = params[2];
+
+  // Convert image coordinates to angles
+  const double lon = (x - c1) / f;  // horizontal angle (longitude)
+  const double lat = (y - c2) / f;  // vertical angle (latitude)
+
+  // Convert spherical coordinates to 3D ray
+  const double cos_lat = std::cos(lat);
+  *u = cos_lat * std::sin(lon);
+  *v = std::sin(lat);
+  // w = cos_lat * cos(lon), normalized to 1 below
+
+  return true;
+}
+
+// Specialized threshold calculation for panoramic camera
+template <>
+template <typename T>
+T BaseCameraModel<PanoramicCameraModel>::CamFromImgThreshold(
+    const T* params, const T threshold) {
+  // Error factor for converting from normal plane to sphere
+  // This accounts for the distortion in equirectangular projection
+  constexpr T kErrorFactorNormalPlaneToSphere = T(1.1244554237496478);
+  
+  T mean_focal_length = 0;
+  for (const size_t idx : PanoramicCameraModel::focal_length_idxs) {
+    mean_focal_length += params[idx];
+  }
+  mean_focal_length /= PanoramicCameraModel::focal_length_idxs.size();
+  
+  return kErrorFactorNormalPlaneToSphere * threshold / mean_focal_length;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 std::optional<Eigen::Vector2d> CameraModelImgFromCam(
     const CameraModelId model_id,
