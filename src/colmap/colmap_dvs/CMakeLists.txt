@@ -27,6 +27,7 @@ COLMAP_ADD_DLL(
     NAME colmap_dvs
     SRCS
     colmap_lib.h colmap_lib.cpp
+    colmap_ffi.h colmap_ffi.cpp
     sparse_reconstruct_controller.h sparse_reconstruct_controller.cpp
     PUBLIC_LINK_LIBS
         colmap_controllers
