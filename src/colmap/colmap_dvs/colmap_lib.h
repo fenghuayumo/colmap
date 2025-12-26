@@ -32,6 +32,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <mutex>
 namespace colmap {
     class SparseReconstructionController;
 }
@@ -95,10 +96,26 @@ struct COLMAP_API ColmapSparseReconstruct {
     int GetSparseReconstructPhase();
     float GetProgressOnCurrentPhase();
     auto run()->bool;
+    
+    // Direct FFI-friendly methods (zero-copy, returns malloc'd arrays)
+    auto getPoints3DArray(int id, size_t* out_count) const -> colmap::SparsePoint*;
+    auto getCameraTracksArray(int id, size_t* out_count) const -> colmap::CameraTrack*;
+    auto getImageTracksArray(int id, size_t* out_count) const -> colmap::ImageTrack*;
+    
+    // Atomic method to get both cameras and images in a single lock
+    struct CameraAndImageArrays {
+        colmap::CameraTrack* cameras;
+        size_t camera_count;
+        colmap::ImageTrack* images;
+        size_t image_count;
+    };
+    auto getCameraAndImageTracksArray(int id) const -> CameraAndImageArrays;
+    
+    // Legacy vector-based methods (deprecated - causes extra copy)
     auto getPoints3D(int id) const -> std::vector<colmap::SparsePoint>;
-    auto getCameraTracks(int id) const -> std::vector<
-        colmap::CameraTrack>;
+    auto getCameraTracks(int id) const -> std::vector<colmap::CameraTrack>;
     auto getImageTracks(int id) const -> std::vector<colmap::ImageTrack>;
+    
     auto pause()->void;
     auto stop()->void;
     auto resume()->void;
@@ -110,4 +127,5 @@ struct COLMAP_API ColmapSparseReconstruct {
     //std::vector<colmap::SparsePoint>   points;
     //std::vector<colmap::CameraTrack>    cameras;  
     std::shared_ptr<colmap::SparseReconstructionController>  controller_;
+    mutable std::mutex controller_mutex_;  // Protect concurrent access to controller data
 };

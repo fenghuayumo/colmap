@@ -50,6 +50,233 @@ ColmapSparseReconstruct::~ColmapSparseReconstruct()
 {
 }
 
+// Optimized: Direct FFI array allocation (zero-copy)
+auto ColmapSparseReconstruct::getPoints3DArray(int id, size_t* out_count) const -> colmap::SparsePoint* {
+  std::lock_guard<std::mutex> lock(controller_mutex_);
+  
+  *out_count = 0;
+  
+  if (!controller_ || controller_->NumReconstructions() < 1) {
+    return nullptr;
+  }
+  
+  const auto& pts = controller_->Points3D(id);
+  if (pts.empty()) {
+    return nullptr;
+  }
+  
+  *out_count = pts.size();
+  auto* points = static_cast<colmap::SparsePoint*>(malloc(sizeof(colmap::SparsePoint) * pts.size()));
+  
+  if (points) {
+    size_t i = 0;
+    for (const auto& [_, p] : pts) {
+      points[i].xyz.x = static_cast<float>(p.xyz(0));
+      points[i].xyz.y = static_cast<float>(p.xyz(1));
+      points[i].xyz.z = static_cast<float>(p.xyz(2));
+      points[i].color.x = p.color(0);
+      points[i].color.y = p.color(1);
+      points[i].color.z = p.color(2);
+      points[i].color.w = 0;
+      ++i;
+    }
+  }
+  
+  return points;
+}
+
+auto ColmapSparseReconstruct::getCameraTracksArray(int id, size_t* out_count) const -> colmap::CameraTrack* {
+  std::lock_guard<std::mutex> lock(controller_mutex_);
+  
+  *out_count = 0;
+  
+  if (!controller_ || controller_->NumReconstructions() < 1) {
+    return nullptr;
+  }
+  
+  const auto& cams = controller_->Cameras(id);
+  if (cams.empty()) {
+    return nullptr;
+  }
+  
+  *out_count = cams.size();
+  // ⚠️ Using malloc with C++ objects (std::vector) is DANGEROUS!
+  // But we're immediately copying to FFI layer which expects malloc'd memory
+  // The FFI layer MUST free this before Rust uses it
+  auto* cameras = static_cast<colmap::CameraTrack*>(malloc(sizeof(colmap::CameraTrack) * cams.size()));
+  
+  if (cameras) {
+    size_t i = 0;
+    for (const auto& [_, c] : cams) {
+      // Use placement new to properly construct the CameraTrack object
+      new (&cameras[i]) colmap::CameraTrack();
+      
+      cameras[i].camera_id = c.camera_id;
+      cameras[i].model_id = static_cast<int>(c.model_id);
+      cameras[i].width = c.width;
+      cameras[i].height = c.height;
+      cameras[i].params = c.params;  // std::vector copy
+      
+      ++i;
+    }
+  }
+  
+  return cameras;
+}
+
+auto ColmapSparseReconstruct::getImageTracksArray(int id, size_t* out_count) const -> colmap::ImageTrack* {
+  std::lock_guard<std::mutex> lock(controller_mutex_);
+  
+  *out_count = 0;
+  
+  if (!controller_ || controller_->NumReconstructions() < 1) {
+    return nullptr;
+  }
+  
+  const auto& imgs = controller_->Images(id);
+  if (imgs.empty()) {
+    return nullptr;
+  }
+  
+  *out_count = imgs.size();
+  // ⚠️ Using malloc with C++ objects (std::string) is DANGEROUS!
+  auto* image_tracks = static_cast<colmap::ImageTrack*>(malloc(sizeof(colmap::ImageTrack) * imgs.size()));
+  
+  if (image_tracks) {
+    size_t i = 0;
+    for (const auto& [_, img] : imgs) {
+      const auto& camfromWorld = img.CamFromWorld();
+      
+      // Use placement new to properly construct the ImageTrack object
+      new (&image_tracks[i]) colmap::ImageTrack();
+      
+      image_tracks[i].image_id = img.ImageId();
+      image_tracks[i].name = img.Name();  // std::string copy
+      image_tracks[i].camera_id = img.CameraId();
+      image_tracks[i].rotation.x = camfromWorld.rotation.x();
+      image_tracks[i].rotation.y = camfromWorld.rotation.y();
+      image_tracks[i].rotation.z = camfromWorld.rotation.z();
+      image_tracks[i].rotation.w = camfromWorld.rotation.w();
+      image_tracks[i].translation.x = camfromWorld.translation.x();
+      image_tracks[i].translation.y = camfromWorld.translation.y();
+      image_tracks[i].translation.z = camfromWorld.translation.z();
+      
+      ++i;
+    }
+  }
+  
+  return image_tracks;
+}
+
+// Atomic method to get both cameras and images in a single lock
+// This prevents data inconsistency when COLMAP is modifying data between separate calls
+auto ColmapSparseReconstruct::getCameraAndImageTracksArray(int id) const -> CameraAndImageArrays {
+  std::lock_guard<std::mutex> lock(controller_mutex_);
+  
+  CameraAndImageArrays result{nullptr, 0, nullptr, 0};
+  
+  if (!controller_ || controller_->NumReconstructions() < 1) {
+    return result;
+  }
+  
+  // Get cameras
+  const auto& cams = controller_->Cameras(id);
+  if (!cams.empty()) {
+    auto* cameras = static_cast<colmap::CameraTrack*>(malloc(sizeof(colmap::CameraTrack) * cams.size()));
+    
+    if (!cameras) {
+      // malloc failed, return empty result
+      return result;
+    }
+    
+    try {
+      size_t i = 0;
+      for (const auto& [_, c] : cams) {
+        new (&cameras[i]) colmap::CameraTrack();
+        cameras[i].camera_id = c.camera_id;
+        cameras[i].model_id = static_cast<int>(c.model_id);
+        cameras[i].width = c.width;
+        cameras[i].height = c.height;
+        cameras[i].params = c.params;  // std::vector copy - can throw
+        ++i;
+      }
+      result.camera_count = cams.size();
+      result.cameras = cameras;
+    } catch (...) {
+      // Exception during copy - cleanup allocated memory
+      for (size_t i = 0; i < cams.size(); ++i) {
+        cameras[i].~CameraTrack();
+      }
+      free(cameras);
+      return result;
+    }
+  }
+  
+  // Get images
+  const auto& imgs = controller_->Images(id);
+  if (!imgs.empty()) {
+    auto* images = static_cast<colmap::ImageTrack*>(malloc(sizeof(colmap::ImageTrack) * imgs.size()));
+    
+    if (!images) {
+      // malloc failed - cleanup cameras if allocated
+      if (result.cameras) {
+        for (size_t i = 0; i < result.camera_count; ++i) {
+          result.cameras[i].~CameraTrack();
+        }
+        free(result.cameras);
+        result.cameras = nullptr;
+        result.camera_count = 0;
+      }
+      return result;
+    }
+    
+    try {
+      size_t i = 0;
+      for (const auto& [_, img] : imgs) {
+        const auto& camfromWorld = img.CamFromWorld();
+        
+        new (&images[i]) colmap::ImageTrack();
+        images[i].image_id = img.ImageId();
+        images[i].name = img.Name();  // std::string copy - can throw
+        images[i].camera_id = img.CameraId();
+        images[i].rotation.x = camfromWorld.rotation.x();
+        images[i].rotation.y = camfromWorld.rotation.y();
+        images[i].rotation.z = camfromWorld.rotation.z();
+        images[i].rotation.w = camfromWorld.rotation.w();
+        images[i].translation.x = camfromWorld.translation.x();
+        images[i].translation.y = camfromWorld.translation.y();
+        images[i].translation.z = camfromWorld.translation.z();
+        
+        ++i;
+      }
+      result.image_count = imgs.size();
+      result.images = images;
+    } catch (...) {
+      // Exception during copy - cleanup allocated memory
+      for (size_t i = 0; i < imgs.size(); ++i) {
+        images[i].~ImageTrack();
+      }
+      free(images);
+      
+      // Also cleanup cameras if allocated
+      if (result.cameras) {
+        for (size_t i = 0; i < result.camera_count; ++i) {
+          result.cameras[i].~CameraTrack();
+        }
+        free(result.cameras);
+        result.cameras = nullptr;
+        result.camera_count = 0;
+      }
+      
+      result.image_count = 0;
+      result.images = nullptr;
+    }
+  }
+  
+  return result;
+}
+
+// Legacy vector-based method (deprecated)
 auto ColmapSparseReconstruct::getPoints3D(int id) const
 -> std::vector<colmap::SparsePoint> {
   std::vector<colmap::SparsePoint> points;

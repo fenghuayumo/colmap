@@ -241,6 +241,20 @@ COLMAP_FFI_EXPORT ColmapCameraTrackArray colmap_get_camera_tracks(ColmapReconstr
  */
 COLMAP_FFI_EXPORT ColmapImageTrackArray colmap_get_image_tracks(ColmapReconstructPtr handle, int32_t model_id);
 
+/**
+ * Atomically get both camera and image tracks in a single lock
+ * This prevents data inconsistency when COLMAP is modifying data
+ * @param handle Pointer to the instance
+ * @param model_id Model ID (usually 0)
+ * @param out_camera_array Output pointer for camera tracks array
+ * @param out_image_array Output pointer for image tracks array
+ */
+COLMAP_FFI_EXPORT void colmap_get_camera_and_image_tracks(
+    ColmapReconstructPtr handle,
+    int32_t model_id,
+    ColmapCameraTrackArray* out_camera_array,
+    ColmapImageTrackArray* out_image_array);
+
 // ============== Memory Management Functions ==============
 
 /**

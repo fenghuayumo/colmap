@@ -170,25 +170,22 @@ ColmapSparsePointArray colmap_get_points3d(ColmapReconstructPtr handle, int32_t 
         return result;
     }
     
-    auto points = handle->impl->getPoints3D(model_id);
-    if (points.empty()) {
+    // Use optimized zero-copy method
+    size_t count = 0;
+    auto* points = handle->impl->getPoints3DArray(model_id, &count);
+    
+    if (!points || count == 0) {
         return result;
     }
     
-    result.count = points.size();
-    result.data = static_cast<ColmapSparsePoint*>(malloc(sizeof(ColmapSparsePoint) * result.count));
+    // Zero-copy optimization: colmap::SparsePoint and ColmapSparsePoint have identical memory layout
+    // Both are 16 bytes: {float x,y,z; uint8 r,g,b,a}
+    // We can directly reinterpret the pointer instead of copying!
+    static_assert(sizeof(colmap::SparsePoint) == sizeof(ColmapSparsePoint), 
+                  "SparsePoint size mismatch");
     
-    if (result.data) {
-        for (size_t i = 0; i < result.count; ++i) {
-            result.data[i].x = points[i].xyz.x;
-            result.data[i].y = points[i].xyz.y;
-            result.data[i].z = points[i].xyz.z;
-            result.data[i].r = points[i].color.x;
-            result.data[i].g = points[i].color.y;
-            result.data[i].b = points[i].color.z;
-            result.data[i].a = points[i].color.w;
-        }
-    }
+    result.data = reinterpret_cast<ColmapSparsePoint*>(points);
+    result.count = count;
     
     return result;
 }
@@ -200,32 +197,54 @@ ColmapCameraTrackArray colmap_get_camera_tracks(ColmapReconstructPtr handle, int
         return result;
     }
     
-    auto tracks = handle->impl->getCameraTracks(model_id);
-    if (tracks.empty()) {
+    // Use optimized method - one pass through data
+    size_t count = 0;
+    auto* tracks = handle->impl->getCameraTracksArray(model_id, &count);
+    
+    if (!tracks || count == 0) {
         return result;
     }
     
-    result.count = tracks.size();
-    result.data = static_cast<ColmapCameraTrack*>(malloc(sizeof(ColmapCameraTrack) * result.count));
+    result.data = static_cast<ColmapCameraTrack*>(malloc(sizeof(ColmapCameraTrack) * count));
     
-    if (result.data) {
-        for (size_t i = 0; i < result.count; ++i) {
-            result.data[i].camera_id = tracks[i].camera_id;
-            result.data[i].model_id = tracks[i].model_id;
-            result.data[i].width = static_cast<uint32_t>(tracks[i].width);
-            result.data[i].height = static_cast<uint32_t>(tracks[i].height);
-            result.data[i].params_count = tracks[i].params.size();
-            
-            if (result.data[i].params_count > 0) {
-                result.data[i].params = static_cast<double*>(malloc(sizeof(double) * result.data[i].params_count));
-                if (result.data[i].params) {
-                    memcpy(result.data[i].params, tracks[i].params.data(), sizeof(double) * result.data[i].params_count);
-                }
+    if (!result.data) {
+        // malloc failed - cleanup and return empty result
+        for (size_t i = 0; i < count; ++i) {
+            tracks[i].~CameraTrack();
+        }
+        free(tracks);
+        return result;  // {nullptr, 0}
+    }
+    
+    result.count = count;
+    
+    for (size_t i = 0; i < count; ++i) {
+        result.data[i].camera_id = tracks[i].camera_id;
+        result.data[i].model_id = tracks[i].model_id;
+        result.data[i].width = static_cast<uint32_t>(tracks[i].width);
+        result.data[i].height = static_cast<uint32_t>(tracks[i].height);
+        result.data[i].params_count = tracks[i].params.size();
+        
+        // CRITICAL: Initialize to nullptr first to prevent heap corruption
+        result.data[i].params = nullptr;
+        
+        if (result.data[i].params_count > 0) {
+            result.data[i].params = static_cast<double*>(malloc(sizeof(double) * result.data[i].params_count));
+            if (result.data[i].params) {
+                memcpy(result.data[i].params, tracks[i].params.data(), sizeof(double) * result.data[i].params_count);
             } else {
-                result.data[i].params = nullptr;
+                // If malloc fails, reset params_count to 0 to be consistent
+                result.data[i].params_count = 0;
             }
         }
     }
+    
+    // ✨ Critical: Must call destructors before freeing malloc'd memory!
+    // The tracks array was allocated with malloc but contains C++ objects (std::vector)
+    for (size_t i = 0; i < count; ++i) {
+        tracks[i].~CameraTrack();  // Explicitly call destructor to free std::vector memory
+    }
+    free(tracks);
     
     return result;
 }
@@ -237,39 +256,184 @@ ColmapImageTrackArray colmap_get_image_tracks(ColmapReconstructPtr handle, int32
         return result;
     }
     
-    auto tracks = handle->impl->getImageTracks(model_id);
-    if (tracks.empty()) {
+    // Use optimized method - one pass through data
+    size_t count = 0;
+    auto* tracks = handle->impl->getImageTracksArray(model_id, &count);
+    
+    if (!tracks || count == 0) {
         return result;
     }
     
-    result.count = tracks.size();
-    result.data = static_cast<ColmapImageTrack*>(malloc(sizeof(ColmapImageTrack) * result.count));
+    result.data = static_cast<ColmapImageTrack*>(malloc(sizeof(ColmapImageTrack) * count));
     
-    if (result.data) {
-        for (size_t i = 0; i < result.count; ++i) {
-            result.data[i].image_id = tracks[i].image_id;
-            result.data[i].camera_id = tracks[i].camera_id;
-            
-            // Copy name string
+    if (!result.data) {
+        // malloc failed - cleanup and return empty result
+        for (size_t i = 0; i < count; ++i) {
+            tracks[i].~ImageTrack();
+        }
+        free(tracks);
+        return result;  // {nullptr, 0}
+    }
+    
+    result.count = count;
+    
+    for (size_t i = 0; i < count; ++i) {
+        result.data[i].image_id = tracks[i].image_id;
+        result.data[i].camera_id = tracks[i].camera_id;
+        
+        // Copy name string - CRITICAL: Initialize to nullptr first to prevent heap corruption
+        result.data[i].name = nullptr;
+        if (!tracks[i].name.empty()) {
             result.data[i].name = static_cast<char*>(malloc(tracks[i].name.size() + 1));
             if (result.data[i].name) {
                 strcpy(result.data[i].name, tracks[i].name.c_str());
             }
-            
-            // Rotation quaternion (xyzw in C++ vec4 -> wxyz for standard quaternion)
-            result.data[i].qw = tracks[i].rotation.w;
-            result.data[i].qx = tracks[i].rotation.x;
-            result.data[i].qy = tracks[i].rotation.y;
-            result.data[i].qz = tracks[i].rotation.z;
-            
-            // Translation
-            result.data[i].tx = tracks[i].translation.x;
-            result.data[i].ty = tracks[i].translation.y;
-            result.data[i].tz = tracks[i].translation.z;
         }
+        
+        // Rotation quaternion (xyzw in C++ vec4 -> wxyz for standard quaternion)
+        result.data[i].qw = tracks[i].rotation.w;
+        result.data[i].qx = tracks[i].rotation.x;
+        result.data[i].qy = tracks[i].rotation.y;
+        result.data[i].qz = tracks[i].rotation.z;
+        
+        // Translation
+        result.data[i].tx = tracks[i].translation.x;
+        result.data[i].ty = tracks[i].translation.y;
+        result.data[i].tz = tracks[i].translation.z;
     }
     
+    // ✨ Critical: Must call destructors before freeing malloc'd memory!
+    // The tracks array was allocated with malloc but contains C++ objects (std::string)
+    for (size_t i = 0; i < count; ++i) {
+        tracks[i].~ImageTrack();  // Explicitly call destructor to free std::string memory
+    }
+    free(tracks);
+    
     return result;
+}
+
+void colmap_get_camera_and_image_tracks(
+    ColmapReconstructPtr handle,
+    int32_t model_id,
+    ColmapCameraTrackArray* out_camera_array,
+    ColmapImageTrackArray* out_image_array) {
+    
+    // Initialize outputs
+    if (!out_camera_array || !out_image_array) {
+        return;
+    }
+    
+    out_camera_array->data = nullptr;
+    out_camera_array->count = 0;
+    out_image_array->data = nullptr;
+    out_image_array->count = 0;
+    
+    if (!handle || !handle->impl) {
+        return;
+    }
+    
+    // Get both arrays atomically in a single lock
+    auto result = handle->impl->getCameraAndImageTracksArray(model_id);
+    
+    // Early return if no data
+    if (!result.cameras && !result.images) {
+        return;
+    }
+    
+    // Convert cameras
+    if (result.cameras && result.camera_count > 0) {
+        out_camera_array->data = static_cast<ColmapCameraTrack*>(malloc(sizeof(ColmapCameraTrack) * result.camera_count));
+        
+        if (!out_camera_array->data) {
+            // Cleanup on malloc failure
+            for (size_t i = 0; i < result.camera_count; ++i) {
+                result.cameras[i].~CameraTrack();
+            }
+            free(result.cameras);
+            
+            if (result.images) {
+                for (size_t i = 0; i < result.image_count; ++i) {
+                    result.images[i].~ImageTrack();
+                }
+                free(result.images);
+            }
+            return;
+        }
+        
+        out_camera_array->count = result.camera_count;
+        
+        for (size_t i = 0; i < result.camera_count; ++i) {
+            out_camera_array->data[i].camera_id = result.cameras[i].camera_id;
+            out_camera_array->data[i].model_id = result.cameras[i].model_id;
+            out_camera_array->data[i].width = static_cast<uint32_t>(result.cameras[i].width);
+            out_camera_array->data[i].height = static_cast<uint32_t>(result.cameras[i].height);
+            out_camera_array->data[i].params_count = result.cameras[i].params.size();
+            
+            out_camera_array->data[i].params = nullptr;
+            
+            if (out_camera_array->data[i].params_count > 0) {
+                out_camera_array->data[i].params = static_cast<double*>(malloc(sizeof(double) * out_camera_array->data[i].params_count));
+                if (out_camera_array->data[i].params) {
+                    memcpy(out_camera_array->data[i].params, result.cameras[i].params.data(), sizeof(double) * out_camera_array->data[i].params_count);
+                } else {
+                    out_camera_array->data[i].params_count = 0;
+                }
+            }
+        }
+        
+        // Cleanup source cameras
+        for (size_t i = 0; i < result.camera_count; ++i) {
+            result.cameras[i].~CameraTrack();
+        }
+        free(result.cameras);
+    }
+    
+    // Convert images
+    if (result.images && result.image_count > 0) {
+        out_image_array->data = static_cast<ColmapImageTrack*>(malloc(sizeof(ColmapImageTrack) * result.image_count));
+        
+        if (!out_image_array->data) {
+            // Cleanup on malloc failure
+            for (size_t i = 0; i < result.image_count; ++i) {
+                result.images[i].~ImageTrack();
+            }
+            free(result.images);
+            
+            // Also cleanup already-allocated cameras
+            colmap_free_camera_tracks(out_camera_array);
+            return;
+        }
+        
+        out_image_array->count = result.image_count;
+        
+        for (size_t i = 0; i < result.image_count; ++i) {
+            out_image_array->data[i].image_id = result.images[i].image_id;
+            out_image_array->data[i].camera_id = result.images[i].camera_id;
+            
+            out_image_array->data[i].name = nullptr;
+            if (!result.images[i].name.empty()) {
+                out_image_array->data[i].name = static_cast<char*>(malloc(result.images[i].name.size() + 1));
+                if (out_image_array->data[i].name) {
+                    strcpy(out_image_array->data[i].name, result.images[i].name.c_str());
+                }
+            }
+            
+            out_image_array->data[i].qw = result.images[i].rotation.w;
+            out_image_array->data[i].qx = result.images[i].rotation.x;
+            out_image_array->data[i].qy = result.images[i].rotation.y;
+            out_image_array->data[i].qz = result.images[i].rotation.z;
+            
+            out_image_array->data[i].tx = result.images[i].translation.x;
+            out_image_array->data[i].ty = result.images[i].translation.y;
+            out_image_array->data[i].tz = result.images[i].translation.z;
+        }
+        
+        // Cleanup source images
+        for (size_t i = 0; i < result.image_count; ++i) {
+            result.images[i].~ImageTrack();
+        }
+        free(result.images);
+    }
 }
 
 void colmap_free_points(ColmapSparsePointArray* arr) {
