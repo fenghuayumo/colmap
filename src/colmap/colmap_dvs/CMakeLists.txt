@@ -26,9 +26,8 @@ include_directories(${SuiteSparse_CHOLMOD_INCLUDE_DIR})
 COLMAP_ADD_DLL(
     NAME colmap_dvs
     SRCS
-    colmap_lib.h colmap_lib.cpp
-    colmap_ffi.h colmap_ffi.cpp
-    sparse_reconstruct_controller.h sparse_reconstruct_controller.cpp
+    colmap_reconstruction_ffi.h
+    colmap_reconstruction_ffi.cpp
     PUBLIC_LINK_LIBS
         colmap_controllers
         colmap_estimators
