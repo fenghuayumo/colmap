@@ -86,6 +86,9 @@ static void ConfigureOptionsFromQuality(IncrementalPipelineOptions* options, Col
             options->ba_global_max_num_iterations = 50;
             break;
     }
+    options->mapper.ba_global_ignore_redundant_points3D = true;
+    options->mapper
+        .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
 }
 
 // ============== Reconstruction Manager ==============
