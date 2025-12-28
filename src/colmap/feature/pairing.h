@@ -237,11 +237,11 @@ class PairGenerator {
   virtual void Reset() = 0;
 
   virtual bool HasFinished() const = 0;
-
+  virtual bool IsPrepared() const { return true; }
   virtual std::vector<std::pair<image_t, image_t>> Next() = 0;
 
   std::vector<std::pair<image_t, image_t>> AllPairs();
-  float GetProgress() {return progress_;}
+  virtual float GetProgress() {return progress_;}
   float progress_ = 0.0;
 };
 
@@ -284,7 +284,7 @@ class VocabTreePairGenerator : public PairGenerator {
                          const std::vector<image_t>& query_image_ids = {});
 
   void Reset() override;
-
+  bool IsPrepared() const override { return visual_index_->IsPrepared(); }
   bool HasFinished() const override;
 
   std::vector<std::pair<image_t, image_t>> Next() override;
@@ -324,8 +324,19 @@ class SequentialPairGenerator : public PairGenerator {
   void Reset() override;
 
   bool HasFinished() const override;
+  
+  bool IsPrepared() const override {
+    return vocab_tree_pair_generator_ ? vocab_tree_pair_generator_->IsPrepared() : true;
+  }
 
   std::vector<std::pair<image_t, image_t>> Next() override;
+  float GetProgress() override {
+    // If using loop detection with vocab tree, return its progress during indexing phase
+    if (vocab_tree_pair_generator_ && !vocab_tree_pair_generator_->IsPrepared()) {
+      return vocab_tree_pair_generator_->GetProgress();
+    }
+    return PairGenerator::GetProgress();
+  }
 
  private:
   std::vector<image_t> GetOrderedImageIds() const;

@@ -148,6 +148,10 @@ class FaissVisualIndex : public VisualIndex {
   bool IsImageIndexed(int image_id) const override {
     return image_ids_.count(image_id) != 0;
   }
+  
+  bool IsPrepared() const override {
+    return prepared_;
+  }
 
   void Query(const QueryOptions& options,
              const Descriptors& descriptors,

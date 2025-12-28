@@ -280,8 +280,12 @@ VocabTreePairGenerator::VocabTreePairGenerator(
       }
     }
   }
-
-  IndexImages(all_image_ids);
+  
+  // Start IndexImages in a separate thread for async operation
+  std::thread indexing_thread([this, all_image_ids]() {
+    IndexImages(all_image_ids);
+  });
+  indexing_thread.detach();
 
   // Since we parallelize over the query images, there is no need to parallelize
   // the nearest neighbor search over the query descriptors.
@@ -330,7 +334,7 @@ std::vector<std::pair<image_t, image_t>> VocabTreePairGenerator::Next() {
 
   LOG(INFO) << StringPrintf(
       "Matching image [%d/%d]", result_idx_ + 1, query_image_ids_.size());
-  progress_ = static_cast<float>(result_idx_) / static_cast<float>(query_image_ids_.size());
+  progress_ = 0.5 + 0.5 * (static_cast<float>(result_idx_) / static_cast<float>(query_image_ids_.size()));
   // Push the next image to the retrieval queue.
   if (query_idx_ < query_image_ids_.size()) {
     thread_pool_.AddTask(
@@ -369,7 +373,7 @@ void VocabTreePairGenerator::IndexImages(
     timer.Start();
     LOG(INFO) << StringPrintf(
         "Indexing image [%d/%d]", i + 1, image_ids.size());
-    progress_ = (static_cast<float>(i) / static_cast<float>(image_ids.size()));
+    progress_ = 0.5 * (static_cast<float>(i) / static_cast<float>(image_ids.size()));
     auto keypoints = *cache_->GetKeypoints(image_ids[i]);
     auto descriptors = *cache_->GetDescriptors(image_ids[i]);
     if (options_.max_num_features > 0 &&

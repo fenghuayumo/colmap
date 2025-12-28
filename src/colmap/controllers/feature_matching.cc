@@ -104,7 +104,7 @@ class FeatureMatcherThread : public Thread {
 
     std::unique_ptr<PairGenerator> pair_generator =
         THROW_CHECK_NOTNULL(pair_generator_factory_());
-
+    
     while (!pair_generator->HasFinished()) {
       if (IsStopped()) {
         run_timer.PrintMinutes();
@@ -112,9 +112,12 @@ class FeatureMatcherThread : public Thread {
       }
       Timer timer;
       timer.Start();
+      progress_ = pair_generator->GetProgress();
+      if(!pair_generator->IsPrepared()) {
+        continue;
+      }
       const std::vector<std::pair<image_t, image_t>> image_pairs =
           pair_generator->Next();
-      progress_ = pair_generator->GetProgress();
       matcher_.Match(image_pairs);
       LOG(INFO) << StringPrintf("in %.3fs", timer.ElapsedSeconds());
     }

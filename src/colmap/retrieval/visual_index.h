@@ -137,7 +137,8 @@ class VisualIndex {
 
   // Prepare the index after adding images and before querying.
   virtual void Prepare() = 0;
-
+  
+  virtual bool IsPrepared() const = 0;
   // Build a visual index from a set of training descriptors by quantizing the
   // descriptor space into visual words and compute their Hamming embedding.
   virtual void Build(const BuildOptions& options,
