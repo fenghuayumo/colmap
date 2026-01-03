@@ -31,6 +31,8 @@ extern "C" {
  * Check if CUDA is available and meets minimum compute capability requirement (SM6.0)
  * @return -1 if no CUDA device found, otherwise returns the compute capability 
  *         (e.g. 60 for SM6.0, 86 for SM8.6, 89 for SM8.9)
+ * 
+ * Thread-safety: This function is thread-safe
  */
 COLMAP_FFI_EXPORT int32_t colmap_check_cuda_support();
 
@@ -59,6 +61,7 @@ typedef struct {
     bool use_gpu;
     bool single_camera;
     ColmapQuality quality;
+    int32_t random_seed;             // Random seed for deterministic reconstruction (-1 = random, >=0 = fixed)
 } ColmapMapperOptions;
 
 // ============== Callback Types ==============
@@ -142,6 +145,12 @@ colmap_reconstruction_manager_size(ColmapReconstructionManagerPtr mgr);
 
 /**
  * Get reconstruction by index (returns NULL if invalid)
+ * 
+ * Thread-safety: This function should NOT be called concurrently with
+ * an active IncrementalMapper that modifies the same ReconstructionManager.
+ * The reconstruction data may be in an inconsistent state during mapping.
+ * 
+ * Recommendation: Only call after mapper has finished or during controlled pauses.
  */
 COLMAP_FFI_EXPORT ColmapReconstructionPtr 
 colmap_reconstruction_manager_get(ColmapReconstructionManagerPtr mgr, size_t idx);
@@ -324,6 +333,13 @@ colmap_feature_matcher_get_progress(ColmapFeatureMatcherPtr matcher);
 
 /**
  * Create incremental mapper
+ * 
+ * Note: The mapper uses a FIXED random seed (0) for deterministic results.
+ * This ensures that running SFM multiple times on the same data produces
+ * consistent reconstruction results.
+ * 
+ * Thread-safety: The mapper itself is NOT thread-safe. Do not call mapper
+ * methods from multiple threads concurrently.
  */
 COLMAP_FFI_EXPORT ColmapIncrementalMapperPtr 
 colmap_incremental_mapper_create(
@@ -398,6 +414,31 @@ colmap_incremental_mapper_set_progress_callback(
     ColmapIncrementalMapperPtr mapper,
     ColmapProgressCallback callback,
     void* user_data);
+
+/**
+ * Get cached reconstruction statistics (thread-safe, no direct reconstruction access)
+ * This is much faster and safer than accessing reconstruction directly while mapper is running.
+ * Returns 1 if snapshot is available, 0 otherwise.
+ * 
+ * @param mapper The mapper instance
+ * @param num_points3d Output: number of 3D points (can be NULL)
+ * @param num_reg_images Output: number of registered images (can be NULL)
+ * @param num_cameras Output: number of cameras (can be NULL)
+ */
+COLMAP_FFI_EXPORT int32_t
+colmap_incremental_mapper_get_stats(
+    ColmapIncrementalMapperPtr mapper,
+    size_t* num_points3d,
+    size_t* num_reg_images,
+    size_t* num_cameras);
+
+/**
+ * Manually update the cached statistics snapshot
+ * This should be called periodically to refresh the snapshot with latest data.
+ * The mapper may also update it automatically during reconstruction.
+ */
+COLMAP_FFI_EXPORT void
+colmap_incremental_mapper_update_stats(ColmapIncrementalMapperPtr mapper);
 
 // ============== Reconstruction Access ==============
 

@@ -16,6 +16,8 @@
 #include "colmap/util/file.h"
 #include <memory>
 #include <iostream>
+#include <mutex>
+#include <chrono>
 
 #ifdef COLMAP_CUDA_ENABLED
 #include <cuda_runtime.h>
@@ -39,19 +41,51 @@ struct ColmapReconstruction {
         : impl(recon) {}
 };
 
+// Thread-safe snapshot of reconstruction stats for progress reporting
+struct ReconstructionSnapshot {
+    size_t num_points3d = 0;
+    size_t num_reg_images = 0;
+    size_t num_cameras = 0;
+    std::chrono::steady_clock::time_point timestamp;
+};
+
 struct ColmapIncrementalMapper {
-    std::unique_ptr<IncrementalPipeline> pipeline;
+    std::shared_ptr<IncrementalPipeline> pipeline;  // Changed to shared_ptr for proper lifetime management
     std::unique_ptr<ControllerThread<IncrementalPipeline>> controller_thread;
     std::shared_ptr<IncrementalPipelineOptions> options;
     std::shared_ptr<ReconstructionManager> reconstruction_manager;
     ColmapProgressCallback progress_callback = nullptr;
     void* progress_user_data = nullptr;
     
+    // Thread-safe snapshot for progress reporting (avoid frequent reconstruction access)
+    mutable std::mutex snapshot_mutex;
+    ReconstructionSnapshot cached_snapshot;
+    
     ~ColmapIncrementalMapper() {
         if (controller_thread && controller_thread->IsRunning()) {
             controller_thread->Stop();
             controller_thread->Wait();
         }
+    }
+    
+    // Update snapshot from reconstruction (called periodically by mapper thread)
+    void UpdateSnapshot() {
+        if (reconstruction_manager && reconstruction_manager->Size() > 0) {
+            auto recon = reconstruction_manager->Get(0);
+            if (recon) {
+                std::lock_guard<std::mutex> lock(snapshot_mutex);
+                cached_snapshot.num_points3d = recon->NumPoints3D();
+                cached_snapshot.num_reg_images = recon->NumRegImages();
+                cached_snapshot.num_cameras = recon->NumCameras();
+                cached_snapshot.timestamp = std::chrono::steady_clock::now();
+            }
+        }
+    }
+    
+    // Get cached snapshot (thread-safe, no reconstruction access)
+    ReconstructionSnapshot GetSnapshot() const {
+        std::lock_guard<std::mutex> lock(snapshot_mutex);
+        return cached_snapshot;
     }
 };
 
@@ -481,20 +515,35 @@ ColmapIncrementalMapperPtr colmap_incremental_mapper_create(
         // Configure options
         mapper->options = std::make_shared<IncrementalPipelineOptions>();
         
+        // Set random seed for deterministic or random reconstruction
+        // Fixed seed (>=0) ensures consistent SFM results across multiple runs
+        // Random seed (-1) produces different results each run
+        if (opts->random_seed >= 0) {
+            mapper->options->mapper.random_seed = opts->random_seed;
+            std::cout << "[COLMAP] Using FIXED random seed: " << opts->random_seed 
+                      << " (deterministic reconstruction)" << std::endl;
+        } else {
+            // Use random seed (default COLMAP behavior)
+            mapper->options->mapper.random_seed = -1;
+            std::cout << "[COLMAP] Using RANDOM seed (non-deterministic reconstruction)" << std::endl;
+        }
+        
         // Configure quality
         ConfigureOptionsFromQuality(mapper->options.get(), opts->quality);
         
-        // Create pipeline
-        mapper->pipeline = std::make_unique<IncrementalPipeline>(
+        // Create pipeline with shared ownership
+        mapper->pipeline = std::make_shared<IncrementalPipeline>(
             mapper->options,
             opts->image_path ? opts->image_path : "",
             opts->database_path ? opts->database_path : "",
             mapper->reconstruction_manager
         );
         
-        // Create controller thread
+        // Create controller thread with shared pipeline ownership
+        // Both mapper and controller_thread now share ownership
         mapper->controller_thread = std::make_unique<ControllerThread<IncrementalPipeline>>(
-            std::shared_ptr<IncrementalPipeline>(mapper->pipeline.get(), [](IncrementalPipeline*){}));
+            mapper->pipeline
+        );
 
         
         return mapper;
@@ -560,6 +609,34 @@ void colmap_incremental_mapper_set_progress_callback(
     if (!mapper) return;
     mapper->progress_callback = callback;
     mapper->progress_user_data = user_data;
+}
+
+int32_t colmap_incremental_mapper_get_stats(
+    ColmapIncrementalMapperPtr mapper,
+    size_t* num_points3d,
+    size_t* num_reg_images,
+    size_t* num_cameras) {
+    
+    if (!mapper) return 0;
+    
+    // Get cached snapshot (very fast, just copies a few integers with mutex)
+    auto snapshot = mapper->GetSnapshot();
+    
+    // Check if snapshot has been initialized (timestamp is not zero)
+    if (snapshot.timestamp.time_since_epoch().count() == 0) {
+        return 0;  // No snapshot available yet
+    }
+    
+    if (num_points3d) *num_points3d = snapshot.num_points3d;
+    if (num_reg_images) *num_reg_images = snapshot.num_reg_images;
+    if (num_cameras) *num_cameras = snapshot.num_cameras;
+    
+    return 1;
+}
+
+void colmap_incremental_mapper_update_stats(ColmapIncrementalMapperPtr mapper) {
+    if (!mapper) return;
+    mapper->UpdateSnapshot();
 }
 
 // ============== Reconstruction Access ==============
