@@ -17,6 +17,10 @@
 #include <memory>
 #include <iostream>
 
+#ifdef COLMAP_CUDA_ENABLED
+#include <cuda_runtime.h>
+#endif
+
 using namespace colmap;
 
 // ============== Internal Structures ==============
@@ -94,6 +98,43 @@ static void ConfigureOptionsFromQuality(IncrementalPipelineOptions* options, Col
 // ============== Reconstruction Manager ==============
 
 extern "C" {
+
+// ============== CUDA Detection ==============
+
+int32_t colmap_check_cuda_support() {
+#ifdef COLMAP_CUDA_ENABLED
+    try {
+        int device_count = 0;
+        cudaError_t error = cudaGetDeviceCount(&device_count);
+        
+        if (error != cudaSuccess || device_count == 0) {
+            // No CUDA devices found
+            return -1;
+        }
+        
+        // Get properties of the first device (usually the primary GPU)
+        cudaDeviceProp prop;
+        error = cudaGetDeviceProperties(&prop, 0);
+        
+        if (error != cudaSuccess) {
+            return -1;
+        }
+        
+        // Return compute capability as integer (e.g. 60 for SM6.0, 86 for SM8.6)
+        int compute_capability = prop.major * 10 + prop.minor;
+        
+        std::cout << "[COLMAP] CUDA device found: " << prop.name 
+                  << " (Compute Capability " << prop.major << "." << prop.minor << ")" << std::endl;
+        
+        return compute_capability;
+    } catch (...) {
+        return -1;
+    }
+#else
+    // CUDA not enabled during compilation
+    return -1;
+#endif
+}
 
 ColmapReconstructionManagerPtr colmap_reconstruction_manager_create() {
     try {

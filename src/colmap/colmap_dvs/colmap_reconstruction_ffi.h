@@ -25,6 +25,15 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
+// ============== CUDA Detection ==============
+
+/**
+ * Check if CUDA is available and meets minimum compute capability requirement (SM6.0)
+ * @return -1 if no CUDA device found, otherwise returns the compute capability 
+ *         (e.g. 60 for SM6.0, 86 for SM8.6, 89 for SM8.9)
+ */
+COLMAP_FFI_EXPORT int32_t colmap_check_cuda_support();
+
 // ============== Opaque Types ==============
 
 typedef struct ColmapReconstructionManager* ColmapReconstructionManagerPtr;
