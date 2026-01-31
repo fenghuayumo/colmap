@@ -14,10 +14,12 @@
 #include "colmap/util/controller_thread.h"
 #include "colmap/util/misc.h"
 #include "colmap/util/file.h"
+#include "colmap/util/string.h"
 #include <memory>
 #include <iostream>
 #include <mutex>
 #include <chrono>
+#include <limits>
 
 #ifdef COLMAP_CUDA_ENABLED
 #include <cuda_runtime.h>
@@ -91,8 +93,37 @@ struct ColmapIncrementalMapper {
 
 // ============== Helper Functions ==============
 
-static void ConfigureOptionsFromQuality(IncrementalPipelineOptions* options, ColmapQuality quality) {
-    // Apply quality settings (matching COLMAP's OptionManager::ModifyFor*Quality())
+// Configure options for individual/general data (non-video)
+// Matches COLMAP's OptionManager::ModifyForIndividualData()
+static void ConfigureOptionsForIndividualData(IncrementalPipelineOptions* options) {
+    // Allow wider range of focal lengths and extra params for diverse camera types
+    options->min_focal_length_ratio = 0.1;
+    options->max_focal_length_ratio = 10.0;
+    // CRITICAL: Set to max for fisheye/wide-angle lenses that have large distortion params
+    options->max_extra_param = std::numeric_limits<double>::max();
+}
+
+// Configure options for video/sequential data
+// Matches COLMAP's OptionManager::ModifyForVideoData()
+static void ConfigureOptionsForVideoData(IncrementalPipelineOptions* options) {
+    options->mapper.init_min_tri_angle /= 2;
+    options->ba_global_frames_ratio = 1.4;
+    options->ba_global_points_ratio = 1.4;
+    options->min_focal_length_ratio = 0.1;
+    options->max_focal_length_ratio = 10.0;
+    // CRITICAL: Set to max for fisheye/wide-angle lenses that have large distortion params
+    options->max_extra_param = std::numeric_limits<double>::max();
+}
+
+static void ConfigureOptionsFromQuality(IncrementalPipelineOptions* options, ColmapQuality quality, bool is_video) {
+    // First, apply data type specific settings (this is critical for fisheye lenses!)
+    if (is_video) {
+        ConfigureOptionsForVideoData(options);
+    } else {
+        ConfigureOptionsForIndividualData(options);
+    }
+    
+    // Then apply quality settings (matching COLMAP's OptionManager::ModifyFor*Quality())
     switch (quality) {
         case COLMAP_QUALITY_LOW:
             options->ba_local_max_num_iterations = 
@@ -209,7 +240,9 @@ size_t colmap_database_num_images(const char* database_path) {
     if (!database_path) return 0;
     
     try {
-        auto database = Database::Open(database_path);
+        // Convert UTF-8 path to platform encoding (handles Chinese paths on Windows)
+        std::string native_database_path = UTF8ToPlatform(database_path);
+        auto database = Database::Open(native_database_path);
         return database->NumImages();
     } catch (...) {
         return 0;
@@ -232,9 +265,13 @@ ColmapFeatureExtractorPtr colmap_feature_extractor_create(
     try {
         auto extractor = new ColmapFeatureExtractor();
         
+        // Convert UTF-8 paths to platform encoding (handles Chinese paths on Windows)
+        std::string native_database_path = UTF8ToPlatform(opts->database_path);
+        std::string native_image_path = UTF8ToPlatform(opts->image_path);
+        
         // Configure image reader options
         ImageReaderOptions reader_options;
-        reader_options.image_path = opts->image_path;
+        reader_options.image_path = native_image_path;
         reader_options.single_camera = opts->single_camera;
         reader_options.camera_model = opts->camera_model ? opts->camera_model : "SIMPLE_PINHOLE";
         
@@ -258,6 +295,7 @@ ColmapFeatureExtractorPtr colmap_feature_extractor_create(
                 (*extraction_options.sift).max_num_features = 4096;
                 break;
             case COLMAP_QUALITY_HIGH:
+                // Use UI defaults: max_image_size = 3200, max_num_features = 8192
                 extraction_options.max_image_size = 1600;
                 (*extraction_options.sift).max_num_features = 8192;
                 break;
@@ -271,7 +309,7 @@ ColmapFeatureExtractorPtr colmap_feature_extractor_create(
         
         // Create feature extractor controller
         extractor->controller = CreateFeatureExtractorController(
-            opts->database_path,
+            native_database_path,
             reader_options,
             extraction_options
         );
@@ -342,6 +380,13 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
     try {
         auto matcher = new ColmapFeatureMatcher();
         
+        // Convert UTF-8 paths to platform encoding (handles Chinese paths on Windows)
+        std::string native_database_path = UTF8ToPlatform(opts->database_path);
+        std::string native_vocab_tree_path;
+        if (opts->vocab_tree_path) {
+            native_vocab_tree_path = UTF8ToPlatform(opts->vocab_tree_path);
+        }
+        
         // Configure matching options
         FeatureMatchingOptions matching_options;
         matching_options.use_gpu = opts->use_gpu;
@@ -355,7 +400,8 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                 // Use defaults for MEDIUM
                 break;
             case COLMAP_QUALITY_HIGH:
-                matching_options.guided_matching = true;
+                // Use UI defaults: guided_matching = false
+                matching_options.guided_matching = false;
                 break;
             case COLMAP_QUALITY_EXTREME:
                 matching_options.guided_matching = true;
@@ -374,7 +420,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                 
                 // Set vocab tree path if loop detection is enabled
                 if (opts->loop_detection && opts->vocab_tree_path) {
-                    pairing_options.vocab_tree_path = opts->vocab_tree_path;
+                    pairing_options.vocab_tree_path = native_vocab_tree_path;
                 }
                 
                 // Apply quality-specific adjustments
@@ -395,7 +441,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     pairing_options,
                     matching_options,
                     geometry_options,
-                    opts->database_path
+                    native_database_path
                 );
                 break;
             }
@@ -405,7 +451,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     pairing_options,
                     matching_options,
                     geometry_options,
-                    opts->database_path
+                    native_database_path
                 );
                 break;
             }
@@ -415,7 +461,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     return nullptr;
                 }
                 VocabTreePairingOptions pairing_options;
-                pairing_options.vocab_tree_path = opts->vocab_tree_path;
+                pairing_options.vocab_tree_path = native_vocab_tree_path;
                 
                 // Apply quality-specific adjustments
                 switch (opts->quality) {
@@ -428,6 +474,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                         pairing_options.num_images /= 1.5;
                         break;
                     case COLMAP_QUALITY_HIGH:
+                        // Use UI defaults: max_num_features = -1 (no limit)
                         pairing_options.max_num_features = 4096;
                         break;
                     case COLMAP_QUALITY_EXTREME:
@@ -439,7 +486,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     pairing_options,
                     matching_options,
                     geometry_options,
-                    opts->database_path
+                    native_database_path
                 );
                 break;
             }
@@ -512,6 +559,16 @@ ColmapIncrementalMapperPtr colmap_incremental_mapper_create(
         auto mapper = new ColmapIncrementalMapper();
         mapper->reconstruction_manager = mgr->impl;
         
+        // Convert UTF-8 paths to platform encoding (handles Chinese paths on Windows)
+        std::string native_image_path;
+        std::string native_database_path;
+        if (opts->image_path) {
+            native_image_path = UTF8ToPlatform(opts->image_path);
+        }
+        if (opts->database_path) {
+            native_database_path = UTF8ToPlatform(opts->database_path);
+        }
+        
         // Configure options
         mapper->options = std::make_shared<IncrementalPipelineOptions>();
         
@@ -528,14 +585,14 @@ ColmapIncrementalMapperPtr colmap_incremental_mapper_create(
             std::cout << "[COLMAP] Using RANDOM seed (non-deterministic reconstruction)" << std::endl;
         }
         
-        // Configure quality
-        ConfigureOptionsFromQuality(mapper->options.get(), opts->quality);
+        // Configure quality and data type (is_video affects camera filtering params)
+        ConfigureOptionsFromQuality(mapper->options.get(), opts->quality, opts->is_video);
         
         // Create pipeline with shared ownership
         mapper->pipeline = std::make_shared<IncrementalPipeline>(
             mapper->options,
-            opts->image_path ? opts->image_path : "",
-            opts->database_path ? opts->database_path : "",
+            native_image_path,
+            native_database_path,
             mapper->reconstruction_manager
         );
         
@@ -828,11 +885,14 @@ int32_t colmap_reconstruction_write_text(
     }
     
     try {
+        // Convert UTF-8 path to platform encoding (handles Chinese paths on Windows)
+        std::string native_path = UTF8ToPlatform(path);
+        
         // Create directory if it doesn't exist
-        CreateDirIfNotExists(path, /*recursive=*/true);
+        CreateDirIfNotExists(native_path, /*recursive=*/true);
         
         // Write reconstruction to text files
-        recon->impl->WriteText(path);
+        recon->impl->WriteText(native_path);
         
         std::cout << "Successfully wrote reconstruction to " << path << std::endl;
         return 1;
@@ -855,11 +915,14 @@ int32_t colmap_reconstruction_write_binary(
     }
     
     try {
+        // Convert UTF-8 path to platform encoding (handles Chinese paths on Windows)
+        std::string native_path = UTF8ToPlatform(path);
+        
         // Create directory if it doesn't exist
-        CreateDirIfNotExists(path, /*recursive=*/true);
+        CreateDirIfNotExists(native_path, /*recursive=*/true);
         
         // Write reconstruction to binary files
-        recon->impl->WriteBinary(path);
+        recon->impl->WriteBinary(native_path);
         
         std::cout << "Successfully wrote reconstruction to " << path << std::endl;
         return 1;
