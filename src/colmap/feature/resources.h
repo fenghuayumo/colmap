@@ -34,31 +34,18 @@
 namespace colmap {
 
 #ifdef COLMAP_DOWNLOAD_ENABLED
+// Local paths: load from onnx_models/ directory (no runtime download).
+// Run scripts/download_onnx_models.ps1 with -ToProject to populate.
 inline const std::string kDefaultAlikedN16RotFeatureExtractorUri =
-    "https://github.com/colmap/colmap/releases/download/3.13.0/"
-    "aliked-n16rot.onnx;"
-    "aliked-n16rot.onnx;"
-    "39c423d0a6f03d39ec89d3d1d61853765c2fb6a8b8381376c703e5758778a547";
+    "onnx_models/aliked-n16rot.onnx";
 inline const std::string kDefaultAlikedN32FeatureExtractorUri =
-    "https://github.com/colmap/colmap/releases/download/3.13.0/"
-    "aliked-n32.onnx;"
-    "aliked-n32.onnx;"
-    "a077728a02d2de1a775c66df6de8cfeb7c6b51ca57572c64c680131c988c8b3c";
+    "onnx_models/aliked-n32.onnx";
 inline const std::string kDefaultAlikedLightGlueFeatureMatcherUri =
-    "https://github.com/colmap/colmap/releases/download/3.13.0/"
-    "aliked-lightglue.onnx;"
-    "aliked-lightglue.onnx;"
-    "b9a5de7204648b18a8cf5dcac819f9d30de1a5961ef03756803c8b86c2dceb8d";
+    "onnx_models/aliked-lightglue.onnx";
 inline const std::string kDefaultBruteForceONNXMatcherUri =
-    "https://github.com/colmap/colmap/releases/download/3.13.0/"
-    "bruteforce-matcher.onnx;"
-    "bruteforce-matcher.onnx;"
-    "3c1282f96d83f5ffc861a873298d08bbe5219f59af59223f5ceab5c41a182a47";
+    "onnx_models/bruteforce-matcher.onnx";
 inline const std::string kDefaultSiftLightGlueFeatureMatcherUri =
-    "https://github.com/colmap/colmap/releases/download/3.13.0/"
-    "sift-lightglue.onnx;"
-    "sift-lightglue.onnx;"
-    "e0500228472b43f92b3d36881a09b3310d3b058b56187b246cc7b9ab6429096e";
+    "onnx_models/sift-lightglue.onnx";
 #else
 inline const std::string kDefaultAlikedN16RotFeatureExtractorUri = "";
 inline const std::string kDefaultAlikedN32FeatureExtractorUri = "";

@@ -29,15 +29,14 @@
 
 #pragma once
 
-#include "colmap/scene/camera.h"
-#include "colmap/scene/database.h"
-#include "colmap/scene/reconstruction.h"
+#include "colmap/scene/rig_config.h"
 
 #include <filesystem>
-#include <optional>
-#include <vector>
 
 namespace colmap {
+
+class Database;
+class Reconstruction;
 
 // Read the rig configuration from a .json file.
 // For each rig, the configuration specifies a list of cameras with exactly one
@@ -109,15 +108,6 @@ namespace colmap {
 //     ]
 //   }
 // ]
-struct RigConfig {
-  struct RigCamera {
-    bool ref_sensor = false;
-    std::string image_prefix;
-    std::optional<Rigid3d> cam_from_rig;
-    std::optional<Camera> camera;
-  };
-  std::vector<RigCamera> cameras;
-};
 std::vector<RigConfig> ReadRigConfig(const std::filesystem::path& path);
 
 // Applies the given rig configuration to the database and optionally derives

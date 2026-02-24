@@ -31,6 +31,7 @@
 
 #include "colmap/controllers/feature_matching.h"
 #include "colmap/controllers/image_reader.h"
+#include "colmap/scene/reconstruction.h"
 
 #include <filesystem>
 

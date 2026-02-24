@@ -41,6 +41,7 @@ COLMAP_FFI_EXPORT int32_t colmap_check_cuda_support();
 typedef struct ColmapReconstructionManager* ColmapReconstructionManagerPtr;
 typedef struct ColmapReconstruction* ColmapReconstructionPtr;
 typedef struct ColmapIncrementalMapper* ColmapIncrementalMapperPtr;
+typedef struct ColmapGlobalMapper* ColmapGlobalMapperPtr;
 
 // ============== Option Structures ==============
 
@@ -439,6 +440,55 @@ colmap_incremental_mapper_get_stats(
  */
 COLMAP_FFI_EXPORT void
 colmap_incremental_mapper_update_stats(ColmapIncrementalMapperPtr mapper);
+
+// ============== Global Mapper (GLOMAP) ==============
+
+/**
+ * Create global mapper (GLOMAP - Global SfM pipeline)
+ * Uses the same ColmapMapperOptions as incremental mapper.
+ * 
+ * Thread-safety: The mapper itself is NOT thread-safe.
+ */
+COLMAP_FFI_EXPORT ColmapGlobalMapperPtr
+colmap_global_mapper_create(
+    const ColmapMapperOptions* options,
+    ColmapReconstructionManagerPtr mgr);
+
+/**
+ * Destroy global mapper
+ */
+COLMAP_FFI_EXPORT void
+colmap_global_mapper_destroy(ColmapGlobalMapperPtr mapper);
+
+/**
+ * Start global mapping in background thread
+ */
+COLMAP_FFI_EXPORT void
+colmap_global_mapper_start(ColmapGlobalMapperPtr mapper);
+
+/**
+ * Stop global mapping
+ */
+COLMAP_FFI_EXPORT void
+colmap_global_mapper_stop(ColmapGlobalMapperPtr mapper);
+
+/**
+ * Wait for global mapping to complete
+ */
+COLMAP_FFI_EXPORT void
+colmap_global_mapper_wait(ColmapGlobalMapperPtr mapper);
+
+/**
+ * Check if global mapper is running
+ */
+COLMAP_FFI_EXPORT bool
+colmap_global_mapper_is_running(ColmapGlobalMapperPtr mapper);
+
+/**
+ * Check if global mapper is finished
+ */
+COLMAP_FFI_EXPORT bool
+colmap_global_mapper_is_finished(ColmapGlobalMapperPtr mapper);
 
 // ============== Reconstruction Access ==============
 

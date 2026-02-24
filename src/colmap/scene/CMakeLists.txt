@@ -52,7 +52,7 @@ COLMAP_ADD_LIBRARY(
         reconstruction_io_utils.h reconstruction_io_utils.cc
         reconstruction_manager.h reconstruction_manager.cc
         reconstruction_pruning.h reconstruction_pruning.cc
-        rig.h rig.cc
+        rig.h rig.cc rig_config.h rig_config_io.cc
         scene_clustering.h scene_clustering.cc
         synthetic.h synthetic.cc
         track.h track.cc

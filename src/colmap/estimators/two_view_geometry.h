@@ -34,7 +34,7 @@
 #include "colmap/scene/camera.h"
 #include "colmap/scene/database.h"
 #include "colmap/scene/image.h"
-#include "colmap/scene/rig.h"
+#include "colmap/sensor/rig.h"
 #include "colmap/scene/two_view_geometry.h"
 
 #include <unordered_map>

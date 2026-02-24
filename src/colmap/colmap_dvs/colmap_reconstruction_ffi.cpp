@@ -6,6 +6,7 @@
 #include "colmap/scene/reconstruction.h"
 #include "colmap/scene/reconstruction_manager.h"
 #include "colmap/controllers/incremental_pipeline.h"
+#include "colmap/controllers/global_pipeline.h"
 #include "colmap/controllers/feature_extraction.h"
 #include "colmap/controllers/feature_matching.h"
 #include "colmap/controllers/image_reader.h"
@@ -88,6 +89,20 @@ struct ColmapIncrementalMapper {
     ReconstructionSnapshot GetSnapshot() const {
         std::lock_guard<std::mutex> lock(snapshot_mutex);
         return cached_snapshot;
+    }
+};
+
+struct ColmapGlobalMapper {
+    std::shared_ptr<GlobalPipeline> pipeline;
+    std::unique_ptr<ControllerThread<GlobalPipeline>> controller_thread;
+    std::shared_ptr<Database> database;
+    std::shared_ptr<ReconstructionManager> reconstruction_manager;
+
+    ~ColmapGlobalMapper() {
+        if (controller_thread && controller_thread->IsRunning()) {
+            controller_thread->Stop();
+            controller_thread->Wait();
+        }
     }
 };
 
@@ -572,6 +587,10 @@ ColmapIncrementalMapperPtr colmap_incremental_mapper_create(
         // Configure options
         mapper->options = std::make_shared<IncrementalPipelineOptions>();
         
+        // Set image path so COLMAP can extract point colors from images
+        // (moved from constructor parameter to options in upstream refactor)
+        mapper->options->image_path = native_image_path;
+        
         // Set random seed for deterministic or random reconstruction
         // Fixed seed (>=0) ensures consistent SFM results across multiple runs
         // Random seed (-1) produces different results each run
@@ -588,11 +607,11 @@ ColmapIncrementalMapperPtr colmap_incremental_mapper_create(
         // Configure quality and data type (is_video affects camera filtering params)
         ConfigureOptionsFromQuality(mapper->options.get(), opts->quality, opts->is_video);
         
-        // Create pipeline with shared ownership
+        // Open database and create pipeline with shared ownership
+        auto database = Database::Open(native_database_path);
         mapper->pipeline = std::make_shared<IncrementalPipeline>(
             mapper->options,
-            native_image_path,
-            native_database_path,
+            database,
             mapper->reconstruction_manager
         );
         
@@ -696,6 +715,87 @@ void colmap_incremental_mapper_update_stats(ColmapIncrementalMapperPtr mapper) {
     mapper->UpdateSnapshot();
 }
 
+// ============== Global Mapper (GLOMAP) ==============
+
+ColmapGlobalMapperPtr colmap_global_mapper_create(
+    const ColmapMapperOptions* opts,
+    ColmapReconstructionManagerPtr mgr) {
+
+    if (!opts || !mgr || !mgr->impl) {
+        return nullptr;
+    }
+
+    try {
+        auto mapper = new ColmapGlobalMapper();
+        mapper->reconstruction_manager = mgr->impl;
+
+        std::string native_image_path;
+        std::string native_database_path;
+        if (opts->image_path) {
+            native_image_path = UTF8ToPlatform(opts->image_path);
+        }
+        if (opts->database_path) {
+            native_database_path = UTF8ToPlatform(opts->database_path);
+        }
+
+        if (native_database_path.empty()) {
+            delete mapper;
+            return nullptr;
+        }
+
+        mapper->database = Database::Open(native_database_path);
+
+        GlobalPipelineOptions options;
+        options.image_path = native_image_path;
+        options.min_num_matches = 15;
+        options.num_threads = -1;
+        options.random_seed = opts->random_seed >= 0 ? opts->random_seed : -1;
+
+        mapper->pipeline = std::make_shared<GlobalPipeline>(
+            options,
+            mapper->database,
+            mapper->reconstruction_manager
+        );
+
+        mapper->controller_thread = std::make_unique<ControllerThread<GlobalPipeline>>(
+            mapper->pipeline
+        );
+
+        return mapper;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void colmap_global_mapper_destroy(ColmapGlobalMapperPtr mapper) {
+    delete mapper;
+}
+
+void colmap_global_mapper_start(ColmapGlobalMapperPtr mapper) {
+    if (!mapper || !mapper->controller_thread) return;
+    mapper->controller_thread->Start();
+}
+
+void colmap_global_mapper_stop(ColmapGlobalMapperPtr mapper) {
+    if (!mapper || !mapper->controller_thread) return;
+    mapper->controller_thread->Stop();
+}
+
+void colmap_global_mapper_wait(ColmapGlobalMapperPtr mapper) {
+    if (!mapper || !mapper->controller_thread) return;
+    mapper->controller_thread->Wait();
+}
+
+bool colmap_global_mapper_is_running(ColmapGlobalMapperPtr mapper) {
+    if (!mapper || !mapper->controller_thread) return false;
+    return mapper->controller_thread->IsRunning();
+}
+
+bool colmap_global_mapper_is_finished(ColmapGlobalMapperPtr mapper) {
+    if (!mapper || !mapper->controller_thread) return false;
+    return mapper->controller_thread->IsFinished();
+}
+
 // ============== Reconstruction Access ==============
 
 size_t colmap_reconstruction_num_points3d(ColmapReconstructionPtr recon) {
@@ -784,16 +884,16 @@ void colmap_reconstruction_foreach_image(
         const auto& cam_from_world = image.CamFromWorld();
         
         double qvec[4] = {
-            cam_from_world.rotation.w(),
-            cam_from_world.rotation.x(),
-            cam_from_world.rotation.y(),
-            cam_from_world.rotation.z()
+            cam_from_world.rotation().w(),
+            cam_from_world.rotation().x(),
+            cam_from_world.rotation().y(),
+            cam_from_world.rotation().z()
         };
         
         double tvec[3] = {
-            cam_from_world.translation.x(),
-            cam_from_world.translation.y(),
-            cam_from_world.translation.z()
+            cam_from_world.translation().x(),
+            cam_from_world.translation().y(),
+            cam_from_world.translation().z()
         };
         
         callback(
@@ -860,14 +960,14 @@ size_t colmap_reconstruction_copy_image_poses(
         
         image_ids[idx] = image_id;
         
-        qvec[idx * 4 + 0] = cam_from_world.rotation.w();
-        qvec[idx * 4 + 1] = cam_from_world.rotation.x();
-        qvec[idx * 4 + 2] = cam_from_world.rotation.y();
-        qvec[idx * 4 + 3] = cam_from_world.rotation.z();
+        qvec[idx * 4 + 0] = cam_from_world.rotation().w();
+        qvec[idx * 4 + 1] = cam_from_world.rotation().x();
+        qvec[idx * 4 + 2] = cam_from_world.rotation().y();
+        qvec[idx * 4 + 3] = cam_from_world.rotation().z();
         
-        tvec[idx * 3 + 0] = cam_from_world.translation.x();
-        tvec[idx * 3 + 1] = cam_from_world.translation.y();
-        tvec[idx * 3 + 2] = cam_from_world.translation.z();
+        tvec[idx * 3 + 0] = cam_from_world.translation().x();
+        tvec[idx * 3 + 1] = cam_from_world.translation().y();
+        tvec[idx * 3 + 2] = cam_from_world.translation().z();
         
         ++idx;
     }
