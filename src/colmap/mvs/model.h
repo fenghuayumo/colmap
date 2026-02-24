@@ -29,14 +29,10 @@
 
 #pragma once
 
-#include "colmap/mvs/depth_map.h"
 #include "colmap/mvs/image.h"
-#include "colmap/mvs/normal_map.h"
 
-#include <cstdint>
-#include <fstream>
+#include <filesystem>
 #include <map>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -54,11 +50,11 @@ struct Model {
   };
 
   // Read the model from different data formats.
-  void Read(const std::string& path, const std::string& format);
-  void ReadFromCOLMAP(const std::string& path,
-                      const std::string& sparse_path = "sparse",
-                      const std::string& images_path = "images");
-  void ReadFromPMVS(const std::string& path);
+  void Read(const std::filesystem::path& path, const std::string& format);
+  void ReadFromCOLMAP(const std::filesystem::path& path,
+                      const std::filesystem::path& sparse_path = "sparse",
+                      const std::filesystem::path& images_path = "images");
+  void ReadFromPMVS(const std::filesystem::path& path);
 
   // Get the image index for the given image name.
   int GetImageIdx(const std::string& name) const;
@@ -92,8 +88,8 @@ struct Model {
   std::vector<Point> points;
 
  private:
-  bool ReadFromBundlerPMVS(const std::string& path);
-  bool ReadFromRawPMVS(const std::string& path);
+  bool ReadFromBundlerPMVS(const std::filesystem::path& path);
+  bool ReadFromRawPMVS(const std::filesystem::path& path);
 
   std::vector<std::string> image_names_;
   std::unordered_map<std::string, int> image_name_to_idx_;

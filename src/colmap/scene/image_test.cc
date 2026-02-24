@@ -64,11 +64,12 @@ TEST(Image, Print) {
   Image image;
   image.SetImageId(1);
   image.SetCameraId(2);
+  image.SetFrameId(3);
   image.SetName("test");
   std::ostringstream stream;
   stream << image;
   EXPECT_EQ(stream.str(),
-            "Image(image_id=1, camera_id=2, name=\"test\", "
+            "Image(image_id=1, camera_id=2, frame_id=3, name=\"test\", "
             "has_pose=0, triangulated=0/0)");
 }
 
@@ -155,9 +156,9 @@ TEST(Image, SetResetPose) {
   EXPECT_ANY_THROW(image.CamFromWorld());
   frame.SetRigFromWorld(Rigid3d());
   EXPECT_TRUE(image.HasPose());
-  EXPECT_EQ(image.CamFromWorld().rotation.coeffs(),
+  EXPECT_EQ(image.CamFromWorld().rotation().coeffs(),
             Eigen::Quaterniond::Identity().coeffs());
-  EXPECT_EQ(image.CamFromWorld().translation, Eigen::Vector3d::Zero());
+  EXPECT_EQ(image.CamFromWorld().translation(), Eigen::Vector3d::Zero());
   image.FramePtr()->ResetPose();
   EXPECT_FALSE(image.HasPose());
   EXPECT_ANY_THROW(image.CamFromWorld());

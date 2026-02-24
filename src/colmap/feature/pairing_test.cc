@@ -29,6 +29,7 @@
 
 #include "colmap/feature/pairing.h"
 
+#include "colmap/feature/types.h"
 #include "colmap/retrieval/visual_index.h"
 #include "colmap/scene/database_sqlite.h"
 #include "colmap/scene/synthetic.h"
@@ -81,8 +82,10 @@ std::unique_ptr<retrieval::VisualIndex> CreateSyntheticVisualIndex() {
   retrieval::VisualIndex::BuildOptions build_options;
   build_options.num_visual_words = 5;
   // NOLINTNEXTLINE(clang-analyzer-optin.cplusplus.VirtualCall)
-  visual_index->Build(build_options,
-                      retrieval::VisualIndex::Descriptors::Random(50, 128));
+  visual_index->Build(
+      build_options,
+      FeatureDescriptorsFloat(FeatureExtractorType::SIFT,
+                              FeatureDescriptorsFloatData::Random(50, 128)));
   return visual_index;
 }
 
@@ -94,7 +97,7 @@ TEST(VocabTreePairGenerator, Nominal) {
   CHECK_EQ(images.size(), kNumImages);
 
   VocabTreePairingOptions options;
-  options.vocab_tree_path = CreateTestDir() + "/vocab_tree.txt";
+  options.vocab_tree_path = CreateTestDir() / "vocab_tree.txt";
 
   // NOLINTNEXTLINE(clang-analyzer-optin.cplusplus.VirtualCall)
   CreateSyntheticVisualIndex()->Write(options.vocab_tree_path);
@@ -245,12 +248,21 @@ TEST(SpatialPairGenerator, Nominal) {
   CreateSyntheticDatabase(kNumImages, *database);
   const std::vector<Image> images = database->ReadAllImages();
   CHECK_EQ(images.size(), kNumImages);
-  database->WritePosePrior(images[0].ImageId(),
-                           PosePrior(Eigen::Vector3d(1, 2, 3)));
-  database->WritePosePrior(images[1].ImageId(),
-                           PosePrior(Eigen::Vector3d(2, 3, 4)));
-  database->WritePosePrior(images[2].ImageId(),
-                           PosePrior(Eigen::Vector3d(2, 4, 12)));
+
+  PosePrior pose_prior1;
+  pose_prior1.corr_data_id = images[0].DataId();
+  pose_prior1.position = Eigen::Vector3d(1, 2, 3);
+  database->WritePosePrior(pose_prior1);
+
+  PosePrior pose_prior2;
+  pose_prior2.corr_data_id = images[1].DataId();
+  pose_prior2.position = Eigen::Vector3d(2, 3, 4);
+  database->WritePosePrior(pose_prior2);
+
+  PosePrior pose_prior3;
+  pose_prior3.corr_data_id = images[2].DataId();
+  pose_prior3.position = Eigen::Vector3d(2, 4, 12);
+  database->WritePosePrior(pose_prior3);
 
   SpatialPairingOptions options;
   options.max_num_neighbors = 1;
@@ -331,15 +343,24 @@ TEST(SpatialPairGenerator, LargeCoordinates) {
   CreateSyntheticDatabase(kNumImages, *database);
   const std::vector<Image> images = database->ReadAllImages();
   CHECK_EQ(images.size(), kNumImages);
-  database->WritePosePrior(
-      images[0].ImageId(),
-      PosePrior(Eigen::Vector3d(1, 2, 3) + Eigen::Vector3d::Constant(1e16)));
-  database->WritePosePrior(
-      images[1].ImageId(),
-      PosePrior(Eigen::Vector3d(2, 3, 4) + Eigen::Vector3d::Constant(1e16)));
-  database->WritePosePrior(
-      images[2].ImageId(),
-      PosePrior(Eigen::Vector3d(2, 4, 12) + Eigen::Vector3d::Constant(1e16)));
+
+  PosePrior pose_prior1;
+  pose_prior1.corr_data_id = images[0].DataId();
+  pose_prior1.position =
+      Eigen::Vector3d(1, 2, 3) + Eigen::Vector3d::Constant(1e16);
+  database->WritePosePrior(pose_prior1);
+
+  PosePrior pose_prior2;
+  pose_prior2.corr_data_id = images[1].DataId();
+  pose_prior2.position =
+      Eigen::Vector3d(2, 3, 4) + Eigen::Vector3d::Constant(1e16);
+  database->WritePosePrior(pose_prior2);
+
+  PosePrior pose_prior3;
+  pose_prior3.corr_data_id = images[2].DataId();
+  pose_prior3.position =
+      Eigen::Vector3d(2, 4, 12) + Eigen::Vector3d::Constant(1e16);
+  database->WritePosePrior(pose_prior3);
 
   SpatialPairingOptions options;
   options.max_num_neighbors = 1;
@@ -367,14 +388,25 @@ TEST(SpatialPairGenerator, MinNumNeighborsControlsMatchingDistance) {
   CreateSyntheticDatabase(kNumImages, *database);
   const auto images = database->ReadAllImages();
 
-  database->WritePosePrior(images[0].ImageId(),
-                           PosePrior(Eigen::Vector3d(1, 1, 2)));
-  database->WritePosePrior(images[1].ImageId(),
-                           PosePrior(Eigen::Vector3d(1, 2, 3)));
-  database->WritePosePrior(images[2].ImageId(),
-                           PosePrior(Eigen::Vector3d(2, 3, 4)));
-  database->WritePosePrior(images[3].ImageId(),
-                           PosePrior(Eigen::Vector3d(2, 4, 12)));
+  PosePrior pose_prior1;
+  pose_prior1.corr_data_id = images[0].DataId();
+  pose_prior1.position = Eigen::Vector3d(1, 1, 2);
+  database->WritePosePrior(pose_prior1);
+
+  PosePrior pose_prior2;
+  pose_prior2.corr_data_id = images[1].DataId();
+  pose_prior2.position = Eigen::Vector3d(1, 2, 3);
+  database->WritePosePrior(pose_prior2);
+
+  PosePrior pose_prior3;
+  pose_prior3.corr_data_id = images[2].DataId();
+  pose_prior3.position = Eigen::Vector3d(2, 3, 4);
+  database->WritePosePrior(pose_prior3);
+
+  PosePrior pose_prior4;
+  pose_prior4.corr_data_id = images[3].DataId();
+  pose_prior4.position = Eigen::Vector3d(2, 4, 12);
+  database->WritePosePrior(pose_prior4);
 
   SpatialPairingOptions options;
   options.ignore_z = false;
@@ -457,12 +489,21 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
     CreateSyntheticDatabase(kNumImages, *database);
     const std::vector<Image> images = database->ReadAllImages();
     CHECK_EQ(images.size(), kNumImages);
-    database->WritePosePrior(images[0].ImageId(),
-                             PosePrior(Eigen::Vector3d(1, 2, 3)));
-    database->WritePosePrior(images[1].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 3, 4)));
-    database->WritePosePrior(images[2].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 4, 12)));
+
+    PosePrior pose_prior1;
+    pose_prior1.corr_data_id = images[0].DataId();
+    pose_prior1.position = Eigen::Vector3d(1, 2, 3);
+    database->WritePosePrior(pose_prior1);
+
+    PosePrior pose_prior2;
+    pose_prior2.corr_data_id = images[1].DataId();
+    pose_prior2.position = Eigen::Vector3d(2, 3, 4);
+    database->WritePosePrior(pose_prior2);
+
+    PosePrior pose_prior3;
+    pose_prior3.corr_data_id = images[2].DataId();
+    pose_prior3.position = Eigen::Vector3d(2, 4, 12);
+    database->WritePosePrior(pose_prior3);
 
     SpatialPairingOptions options;
     options.max_num_neighbors = 1;
@@ -479,17 +520,31 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
   }
 
   {
+    // Test that the position prior data is read correctly when some images
+    // don't have a pose prior.
+
     constexpr int kNumImages = 4;
     auto database = Database::Open(kInMemorySqliteDatabasePath);
     CreateSyntheticDatabase(kNumImages, *database);
     const std::vector<Image> images = database->ReadAllImages();
     CHECK_EQ(images.size(), kNumImages);
-    database->WritePosePrior(images[0].ImageId(),
-                             PosePrior(Eigen::Vector3d(1, 2, 3)));
-    database->WritePosePrior(images[1].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 3, 4)));
-    database->WritePosePrior(images[2].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 4, 12)));
+
+    database->ClearPosePriors();
+
+    PosePrior pose_prior1;
+    pose_prior1.corr_data_id = images[0].DataId();
+    pose_prior1.position = Eigen::Vector3d(1, 2, 3);
+    database->WritePosePrior(pose_prior1);
+
+    PosePrior pose_prior2;
+    pose_prior2.corr_data_id = images[1].DataId();
+    pose_prior2.position = Eigen::Vector3d(2, 3, 4);
+    database->WritePosePrior(pose_prior2);
+
+    PosePrior pose_prior4;
+    pose_prior4.corr_data_id = images[3].DataId();
+    pose_prior4.position = Eigen::Vector3d(2, 4, 12);
+    database->WritePosePrior(pose_prior4);
 
     SpatialPairingOptions options;
     options.max_num_neighbors = 1;
@@ -511,12 +566,22 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
     CreateSyntheticDatabase(kNumImages, *database);
     const std::vector<Image> images = database->ReadAllImages();
     CHECK_EQ(images.size(), kNumImages);
-    database->WritePosePrior(images[0].ImageId(),
-                             PosePrior(Eigen::Vector3d(0, 0, 2)));
-    database->WritePosePrior(images[1].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 3, 4)));
-    database->WritePosePrior(images[2].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 4, 12)));
+
+    PosePrior pose_prior1;
+    pose_prior1.corr_data_id = images[0].DataId();
+    pose_prior1.position =
+        Eigen::Vector3d(0, 0, std::numeric_limits<double>::quiet_NaN());
+    database->WritePosePrior(pose_prior1);
+
+    PosePrior pose_prior2;
+    pose_prior2.corr_data_id = images[1].DataId();
+    pose_prior2.position = Eigen::Vector3d(2, 3, 4);
+    database->WritePosePrior(pose_prior2);
+
+    PosePrior pose_prior3;
+    pose_prior3.corr_data_id = images[2].DataId();
+    pose_prior3.position = Eigen::Vector3d(2, 4, 12);
+    database->WritePosePrior(pose_prior3);
 
     SpatialPairingOptions options;
     options.max_num_neighbors = 1;
@@ -529,7 +594,7 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
 
     Eigen::RowMajorMatrixXf position_matrix =
         generator.ReadPositionPriorData(*cache);
-    EXPECT_EQ(position_matrix.rows(), 3);
+    EXPECT_EQ(position_matrix.rows(), 2);
   }
 
   {
@@ -538,12 +603,22 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
     CreateSyntheticDatabase(kNumImages, *database);
     const std::vector<Image> images = database->ReadAllImages();
     CHECK_EQ(images.size(), kNumImages);
-    database->WritePosePrior(images[0].ImageId(),
-                             PosePrior(Eigen::Vector3d(0, 0, 2)));
-    database->WritePosePrior(images[1].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 3, 4)));
-    database->WritePosePrior(images[2].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 4, 12)));
+
+    PosePrior pose_prior1;
+    pose_prior1.corr_data_id = images[0].DataId();
+    pose_prior1.position =
+        Eigen::Vector3d(0, 0, std::numeric_limits<double>::quiet_NaN());
+    database->WritePosePrior(pose_prior1);
+
+    PosePrior pose_prior2;
+    pose_prior2.corr_data_id = images[1].DataId();
+    pose_prior2.position = Eigen::Vector3d(2, 3, 4);
+    database->WritePosePrior(pose_prior2);
+
+    PosePrior pose_prior3;
+    pose_prior3.corr_data_id = images[2].DataId();
+    pose_prior3.position = Eigen::Vector3d(2, 4, 12);
+    database->WritePosePrior(pose_prior3);
 
     SpatialPairingOptions options;
     options.max_num_neighbors = 1;
@@ -556,7 +631,7 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
 
     Eigen::RowMajorMatrixXf position_matrix =
         generator.ReadPositionPriorData(*cache);
-    EXPECT_EQ(position_matrix.rows(), 2);
+    EXPECT_EQ(position_matrix.rows(), 3);
   }
 
   {
@@ -565,12 +640,24 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
     CreateSyntheticDatabase(kNumImages, *database);
     const std::vector<Image> images = database->ReadAllImages();
     CHECK_EQ(images.size(), kNumImages);
-    database->WritePosePrior(images[0].ImageId(),
-                             PosePrior(Eigen::Vector3d(0, 0, 0)));
-    database->WritePosePrior(images[1].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 3, 4)));
-    database->WritePosePrior(images[2].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 4, 12)));
+
+    PosePrior pose_prior1;
+    pose_prior1.corr_data_id = images[0].DataId();
+    pose_prior1.position =
+        Eigen::Vector3d(std::numeric_limits<double>::quiet_NaN(),
+                        std::numeric_limits<double>::quiet_NaN(),
+                        std::numeric_limits<double>::quiet_NaN());
+    database->WritePosePrior(pose_prior1);
+
+    PosePrior pose_prior2;
+    pose_prior2.corr_data_id = images[1].DataId();
+    pose_prior2.position = Eigen::Vector3d(2, 3, 4);
+    database->WritePosePrior(pose_prior2);
+
+    PosePrior pose_prior3;
+    pose_prior3.corr_data_id = images[2].DataId();
+    pose_prior3.position = Eigen::Vector3d(2, 4, 12);
+    database->WritePosePrior(pose_prior3);
 
     SpatialPairingOptions options;
     options.max_num_neighbors = 1;
@@ -592,12 +679,24 @@ TEST(SpatialPairGenerator, ReadPositionPriorData) {
     CreateSyntheticDatabase(kNumImages, *database);
     const std::vector<Image> images = database->ReadAllImages();
     CHECK_EQ(images.size(), kNumImages);
-    database->WritePosePrior(images[0].ImageId(),
-                             PosePrior(Eigen::Vector3d(0, 0, 0)));
-    database->WritePosePrior(images[1].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 3, 4)));
-    database->WritePosePrior(images[2].ImageId(),
-                             PosePrior(Eigen::Vector3d(2, 4, 12)));
+
+    PosePrior pose_prior1;
+    pose_prior1.corr_data_id = images[0].DataId();
+    pose_prior1.position =
+        Eigen::Vector3d(std::numeric_limits<double>::quiet_NaN(),
+                        std::numeric_limits<double>::quiet_NaN(),
+                        std::numeric_limits<double>::quiet_NaN());
+    database->WritePosePrior(pose_prior1);
+
+    PosePrior pose_prior2;
+    pose_prior2.corr_data_id = images[1].DataId();
+    pose_prior2.position = Eigen::Vector3d(2, 3, 4);
+    database->WritePosePrior(pose_prior2);
+
+    PosePrior pose_prior3;
+    pose_prior3.corr_data_id = images[2].DataId();
+    pose_prior3.position = Eigen::Vector3d(2, 4, 12);
+    database->WritePosePrior(pose_prior3);
 
     SpatialPairingOptions options;
     options.max_num_neighbors = 1;
@@ -657,7 +756,7 @@ TEST(ImportedPairGenerator, Nominal) {
   CHECK_EQ(images.size(), kNumImages);
 
   ImportedPairingOptions options;
-  options.match_list_path = CreateTestDir() + "/pairs.txt";
+  options.match_list_path = CreateTestDir() / "pairs.txt";
 
   {
     std::ofstream match_list_file(options.match_list_path);

@@ -40,8 +40,8 @@
 #include <cstdint>
 #include <sstream>
 
-// The number of threads per Cuda thread. Warning: Do not change this value,
-// since the templated window sizes rely on this value.
+// The number of threads per Cuda thread block. Warning: Do not change this
+// value, since the templated window sizes rely on this value.
 #define THREADS_PER_BLOCK 32
 
 // We must not include "util/math.h" to avoid any Eigen includes here,
@@ -253,11 +253,12 @@ __device__ inline void ComputeViewingAngles(
   // Length of ray from reference image to point.
   const float RX_inv_norm = rsqrt(DotProduct3(point, point));
 
-  // Length of ray from source image to point.
+  // Length of ray from point to source image.
   const float SX_inv_norm = rsqrt(DotProduct3(SX, SX));
 
   *cos_incident_angle = DotProduct3(SX, normal) * SX_inv_norm;
-  *cos_triangulation_angle = DotProduct3(SX, point) * RX_inv_norm * SX_inv_norm;
+  *cos_triangulation_angle =
+      -DotProduct3(SX, point) * RX_inv_norm * SX_inv_norm;
 }
 
 __device__ inline void ComposeHomography(
@@ -697,9 +698,8 @@ class LikelihoodComputer {
   // Compute the triangulation angle probability.
   __device__ inline float ComputeTriProb(
       const float cos_triangulation_angle) const {
-    const float abs_cos_triangulation_angle = abs(cos_triangulation_angle);
-    if (abs_cos_triangulation_angle > cos_min_triangulation_angle_) {
-      const float scaled = 1.0f - (1.0f - abs_cos_triangulation_angle) /
+    if (cos_triangulation_angle > cos_min_triangulation_angle_) {
+      const float scaled = 1.0f - (1.0f - cos_triangulation_angle) /
                                       (1.0f - cos_min_triangulation_angle_);
       const float likelihood = 1.0f - scaled * scaled;
       return min(1.0f, max(0.0f, likelihood));
@@ -790,7 +790,7 @@ class LikelihoodComputer {
   const float ncc_norm_factor_;
 };
 
-// Rotate normals by 90deg around z-axis in counter-clockwise direction.
+// Generate random normals for each pixel in the normal map.
 __global__ void InitNormalMap(GpuMat<float> normal_map,
                               GpuMat<curandState> rand_state_map) {
   const int row = blockDim.y * blockIdx.y + threadIdx.y;
@@ -1305,8 +1305,8 @@ void PatchMatchCuda::Run() {
     }
   }
 
-#undef SWITCH_WINDOW_RADIUS
-#undef CALL_RUN_FUNC
+#undef CASE_WINDOW_RADIUS
+#undef CASE_WINDOW_STEP
 }
 
 DepthMap PatchMatchCuda::GetDepthMap() const {
@@ -1436,9 +1436,10 @@ void PatchMatchCuda::RunWithWindowSizeAndStep() {
 
       if (last_sweep) {
         if (options_.filter) {
-          consistency_mask_.reset(new GpuMat<uint8_t>(cost_map_->GetWidth(),
-                                                      cost_map_->GetHeight(),
-                                                      cost_map_->GetDepth()));
+          consistency_mask_ =
+              std::make_unique<GpuMat<uint8_t>>(cost_map_->GetWidth(),
+                                                cost_map_->GetHeight(),
+                                                cost_map_->GetDepth());
           consistency_mask_->FillWithScalar(0);
         }
         if (options_.geom_consistency) {
@@ -1538,10 +1539,8 @@ void PatchMatchCuda::InitRefImage() {
   ref_height_ = ref_image.GetHeight();
 
   // Upload to device and filter.
-  ref_image_.reset(new GpuMatRefImage(ref_width_, ref_height_));
-  const std::vector<uint8_t> ref_image_array =
-      ref_image.GetBitmap().ConvertToRowMajorArray();
-  ref_image_->Filter(ref_image_array.data(),
+  ref_image_ = std::make_unique<GpuMatRefImage>(ref_width_, ref_height_);
+  ref_image_->Filter(ref_image.GetBitmap().RowMajorData().data(),
                      options_.window_radius,
                      options_.window_step,
                      options_.sigma_spatial,
@@ -1576,10 +1575,7 @@ void PatchMatchCuda::InitSourceImages() {
       const Image& image = problem_.images->at(problem_.src_image_idxs[i]);
       const Bitmap& bitmap = image.GetBitmap();
       uint8_t* dest = src_images_host_data.data() + max_width * max_height * i;
-      for (size_t r = 0; r < image.GetHeight(); ++r) {
-        memcpy(dest, bitmap.GetScanline(r), image.GetWidth() * sizeof(uint8_t));
-        dest += max_width;
-      }
+      memcpy(dest, bitmap.RowMajorData().data(), bitmap.NumBytes());
     }
 
     // Create source images texture.
@@ -1754,9 +1750,9 @@ void PatchMatchCuda::InitTransforms() {
 }
 
 void PatchMatchCuda::InitWorkspaceMemory() {
-  rand_state_map_.reset(new GpuMatPRNG(ref_width_, ref_height_));
+  rand_state_map_ = std::make_unique<GpuMatPRNG>(ref_width_, ref_height_);
 
-  depth_map_.reset(new GpuMat<float>(ref_width_, ref_height_));
+  depth_map_ = std::make_unique<GpuMat<float>>(ref_width_, ref_height_);
   if (options_.geom_consistency) {
     const DepthMap& init_depth_map =
         problem_.depth_maps->at(problem_.ref_image_idx);
@@ -1767,27 +1763,27 @@ void PatchMatchCuda::InitWorkspaceMemory() {
         options_.depth_min, options_.depth_max, *rand_state_map_);
   }
 
-  normal_map_.reset(new GpuMat<float>(ref_width_, ref_height_, 3));
+  normal_map_ = std::make_unique<GpuMat<float>>(ref_width_, ref_height_, 3);
 
   // Note that it is not necessary to keep the selection probability map in
   // memory for all pixels. Theoretically, it is possible to incorporate
   // the temporary selection probabilities in the global_workspace_.
   // However, it is useful to keep the probabilities for the entire image
   // in memory, so that it can be exported.
-  sel_prob_map_.reset(new GpuMat<float>(
-      ref_width_, ref_height_, problem_.src_image_idxs.size()));
-  prev_sel_prob_map_.reset(new GpuMat<float>(
-      ref_width_, ref_height_, problem_.src_image_idxs.size()));
+  sel_prob_map_ = std::make_unique<GpuMat<float>>(
+      ref_width_, ref_height_, problem_.src_image_idxs.size());
+  prev_sel_prob_map_ = std::make_unique<GpuMat<float>>(
+      ref_width_, ref_height_, problem_.src_image_idxs.size());
   prev_sel_prob_map_->FillWithScalar(0.5f);
 
-  cost_map_.reset(new GpuMat<float>(
-      ref_width_, ref_height_, problem_.src_image_idxs.size()));
+  cost_map_ = std::make_unique<GpuMat<float>>(
+      ref_width_, ref_height_, problem_.src_image_idxs.size());
 
   const int ref_max_dim = std::max(ref_width_, ref_height_);
-  global_workspace_.reset(
-      new GpuMat<float>(ref_max_dim, problem_.src_image_idxs.size(), 2));
+  global_workspace_ = std::make_unique<GpuMat<float>>(
+      ref_max_dim, problem_.src_image_idxs.size(), 2);
 
-  consistency_mask_.reset(new GpuMat<uint8_t>(0, 0, 0));
+  consistency_mask_ = std::make_unique<GpuMat<uint8_t>>(0, 0, 0);
 
   ComputeCudaConfig();
 
@@ -1854,11 +1850,11 @@ void PatchMatchCuda::Rotate() {
   }
 
   // Rotate selection probability map.
-  prev_sel_prob_map_.reset(
-      new GpuMat<float>(width, height, problem_.src_image_idxs.size()));
+  prev_sel_prob_map_ = std::make_unique<GpuMat<float>>(
+      width, height, problem_.src_image_idxs.size());
   sel_prob_map_->Rotate(prev_sel_prob_map_.get());
-  sel_prob_map_.reset(
-      new GpuMat<float>(width, height, problem_.src_image_idxs.size()));
+  sel_prob_map_ = std::make_unique<GpuMat<float>>(
+      width, height, problem_.src_image_idxs.size());
 
   // Rotate cost map.
   {

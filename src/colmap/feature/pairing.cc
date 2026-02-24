@@ -31,13 +31,13 @@
 
 #include "colmap/feature/utils.h"
 #include "colmap/geometry/gps.h"
+#include "colmap/retrieval/resources.h"
 #include "colmap/util/file.h"
 #include "colmap/util/logging.h"
 #include "colmap/util/misc.h"
 #include "colmap/util/timer.h"
 
 #include <fstream>
-#include <numeric>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -49,7 +49,7 @@ namespace colmap {
 namespace {
 
 std::vector<std::pair<image_t, image_t>> ReadImagePairsText(
-    const std::string& path,
+    const std::filesystem::path& path,
     const std::unordered_map<std::string, image_t>& image_name_to_image_id) {
   std::ifstream file(path);
   THROW_CHECK_FILE_OPEN(file, path);
@@ -245,9 +245,6 @@ VocabTreePairGenerator::VocabTreePairGenerator(
   THROW_CHECK(options.Check());
   LOG(INFO) << "Generating image pairs with vocabulary tree...";
 
-  // Read the pre-trained vocabulary tree from disk.
-  visual_index_ = retrieval::VisualIndex::Read(options_.vocab_tree_path);
-
   const std::vector<image_t> all_image_ids = cache_->GetImageIds();
   if (query_image_ids.size() > 0) {
     query_image_ids_ = query_image_ids;
@@ -350,7 +347,7 @@ std::vector<std::pair<image_t, image_t>> VocabTreePairGenerator::Next() {
 
   // Compose the image pairs from the scores.
   image_pairs_.reserve(image_scores.size());
-  for (const auto image_score : image_scores) {
+  for (const auto& image_score : image_scores) {
     image_pairs_.emplace_back(image_id, image_score.image_id);
   }
   ++result_idx_;
@@ -376,13 +373,19 @@ void VocabTreePairGenerator::IndexImages(
     progress_ = 0.5 * (static_cast<float>(i) / static_cast<float>(image_ids.size()));
     auto keypoints = *cache_->GetKeypoints(image_ids[i]);
     auto descriptors = *cache_->GetDescriptors(image_ids[i]);
+    if (visual_index_ == nullptr) {
+      visual_index_ = retrieval::VisualIndex::Read(
+          options_.vocab_tree_path.empty()
+              ? GetVocabTreeUriForFeatureType(descriptors.type)
+              : options_.vocab_tree_path);
+    }
     if (options_.max_num_features > 0 &&
-        descriptors.rows() > options_.max_num_features) {
+        descriptors.data.rows() > options_.max_num_features) {
       ExtractTopScaleFeatures(
           &keypoints, &descriptors, options_.max_num_features);
     }
     visual_index_->Add(
-        index_options, image_ids[i], keypoints, descriptors.cast<float>());
+        index_options, image_ids[i], keypoints, descriptors.ToFloat());
     LOG(INFO) << StringPrintf(" in %.3fs", timer.ElapsedSeconds());
   }
 
@@ -394,7 +397,7 @@ void VocabTreePairGenerator::Query(const image_t image_id) {
   auto keypoints = *cache_->GetKeypoints(image_id);
   auto descriptors = *cache_->GetDescriptors(image_id);
   if (options_.max_num_features > 0 &&
-      descriptors.rows() > options_.max_num_features) {
+      descriptors.data.rows() > options_.max_num_features) {
     ExtractTopScaleFeatures(
         &keypoints, &descriptors, options_.max_num_features);
   }
@@ -403,7 +406,7 @@ void VocabTreePairGenerator::Query(const image_t image_id) {
   retrieval.image_id = image_id;
   visual_index_->Query(query_options_,
                        keypoints,
-                       descriptors.cast<float>(),
+                       descriptors.ToFloat(),
                        &retrieval.image_scores);
 
   THROW_CHECK(queue_.Push(std::move(retrieval)));
@@ -666,16 +669,13 @@ Eigen::RowMajorMatrixXf SpatialPairGenerator::ReadPositionPriorData(
   position_idxs_.reserve(image_ids_.size());
 
   for (size_t i = 0; i < image_ids_.size(); ++i) {
-    const PosePrior* pose_prior = cache.GetPosePriorOrNull(image_ids_[i]);
+    const PosePrior* pose_prior = cache.FindImagePosePriorOrNull(image_ids_[i]);
     if (pose_prior == nullptr) {
       continue;
     }
 
-    const Eigen::Vector3d& position_prior = pose_prior->position;
-    if ((position_prior(0) == 0 && position_prior(1) == 0 &&
-         position_prior(2) == 0) ||
-        (options_.ignore_z && position_prior(0) == 0 &&
-         position_prior(1) == 0)) {
+    if ((!options_.ignore_z && !pose_prior->HasPosition()) ||
+        (options_.ignore_z && !pose_prior->position.head<2>().allFinite())) {
       continue;
     }
 
@@ -684,9 +684,9 @@ Eigen::RowMajorMatrixXf SpatialPairGenerator::ReadPositionPriorData(
 
     switch (pose_prior->coordinate_system) {
       case PosePrior::CoordinateSystem::WGS84: {
-        ells[0](0) = position_prior(0);
-        ells[0](1) = position_prior(1);
-        ells[0](2) = options_.ignore_z ? 0 : position_prior(2);
+        ells[0](0) = pose_prior->position(0);
+        ells[0](1) = pose_prior->position(1);
+        ells[0](2) = options_.ignore_z ? 0 : pose_prior->position(2);
 
         const std::vector<Eigen::Vector3d> xyzs =
             gps_transform.EllipsoidToECEF(ells);
@@ -699,10 +699,10 @@ Eigen::RowMajorMatrixXf SpatialPairGenerator::ReadPositionPriorData(
         LOG(WARNING) << "Unknown coordinate system for image " << image_ids_[i]
                      << ", assuming cartesian.";
       case PosePrior::CoordinateSystem::CARTESIAN:
-        position_matrix(position_idx, 0) = position_prior(0);
-        position_matrix(position_idx, 1) = position_prior(1);
+        position_matrix(position_idx, 0) = pose_prior->position(0);
+        position_matrix(position_idx, 1) = pose_prior->position(1);
         position_matrix(position_idx, 2) =
-            options_.ignore_z ? 0 : position_prior(2);
+            options_.ignore_z ? 0 : pose_prior->position(2);
     }
   }
 

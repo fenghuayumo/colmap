@@ -31,6 +31,8 @@
 
 #include "colmap/feature/extractor.h"
 #include "colmap/feature/matcher.h"
+#include "colmap/feature/onnx_matchers.h"
+#include "colmap/feature/resources.h"
 
 namespace colmap {
 
@@ -122,6 +124,14 @@ struct SiftMatchingOptions {
   ThreadSafeLRUCache<image_t, FeatureDescriptorIndex>*
       cpu_descriptor_index_cache = nullptr;
 
+  // LightGlue matching options.
+  LightGlueONNXMatchingOptions lightglue = []() {
+    LightGlueONNXMatchingOptions options;
+    options.min_score = 0.1;
+    options.model_path = kDefaultSiftLightGlueFeatureMatcherUri;
+    return options;
+  }();
+
   bool Check() const;
 };
 
@@ -145,7 +155,7 @@ std::unique_ptr<FeatureMatcher> CreateSiftFeatureMatcher(
 //    0.32 0.12 1.23 1.0 1 2 3 4
 //    0.32 0.12 1.23 1.0 1 2 3 4
 //
-void LoadSiftFeaturesFromTextFile(const std::string& path,
+void LoadSiftFeaturesFromTextFile(const std::filesystem::path& path,
                                   FeatureKeypoints* keypoints,
                                   FeatureDescriptors* descriptors);
 
