@@ -189,9 +189,9 @@ class FeatureMatcherThread : public Thread {
     THROW_CHECK(matching_options.Check());
     THROW_CHECK(geometry_options.Check());
   }
-  float GetProgress() {return progress_;}
-  float progress_ = 0.0;
+  float GetProgress() { return progress_; }
  private:
+  float progress_ = 0.0;
   void Run() override {
     LOG_HEADING1("Feature matching & geometric verification");
 

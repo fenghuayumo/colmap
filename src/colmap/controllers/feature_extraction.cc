@@ -468,9 +468,9 @@ class FeatureExtractorController : public Thread {
                                                     database_.get(),
                                                     writer_queue_.get());
   }
-  float GetProgress(){return progress_;};
-  float progress_ = 0.0;
+  float GetProgress() { return progress_; }
  private:
+  float progress_ = 0.0;
   void Run() override {
     LOG_HEADING1("Feature extraction");
     Timer run_timer;

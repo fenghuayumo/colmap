@@ -46,12 +46,19 @@ GlobalPipeline::GlobalPipeline(
       database_(std::move(THROW_CHECK_NOTNULL(database))),
       reconstruction_manager_(
           std::move(THROW_CHECK_NOTNULL(reconstruction_manager))) {
-  if (options_.decompose_relative_pose) {
-    MaybeDecomposeAndWriteRelativePoses(database_.get());
-  }
+  // Note: MaybeDecomposeAndWriteRelativePoses was moved to Run() so it
+  // executes on the background thread instead of blocking the constructor.
 }
 
 void GlobalPipeline::Run() {
+  // Decompose relative poses on the background thread (moved from constructor).
+  // This can be slow for large datasets (reads all matches, estimates poses,
+  // writes back to DB) and must not block the calling thread.
+  if (options_.decompose_relative_pose) {
+    LOG(INFO) << "Decomposing relative poses for Global SfM...";
+    MaybeDecomposeAndWriteRelativePoses(database_.get());
+  }
+
   if (!options_.skip_view_graph_calibration) {
     LOG_HEADING1("Running view graph calibration");
     Timer run_timer;
