@@ -498,7 +498,7 @@ class SqliteDatabase : public Database {
     // connections can read concurrently.
     try {
       SQLITE3_CALL(sqlite3_open_v2(
-          PlatformToUTF8(path.string()).c_str(),
+          path.u8string().c_str(),
           &database->database_,
           SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
           nullptr));

@@ -15,7 +15,6 @@
 #include "colmap/util/controller_thread.h"
 #include "colmap/util/misc.h"
 #include "colmap/util/file.h"
-#include "colmap/util/string.h"
 #include <memory>
 #include <iostream>
 #include <mutex>
@@ -255,9 +254,7 @@ size_t colmap_database_num_images(const char* database_path) {
     if (!database_path) return 0;
     
     try {
-        // Convert UTF-8 path to platform encoding (handles Chinese paths on Windows)
-        std::string native_database_path = UTF8ToPlatform(database_path);
-        auto database = Database::Open(native_database_path);
+        auto database = Database::Open(PathFromUTF8(database_path));
         return database->NumImages();
     } catch (...) {
         return 0;
@@ -280,20 +277,18 @@ ColmapFeatureExtractorPtr colmap_feature_extractor_create(
     try {
         auto extractor = new ColmapFeatureExtractor();
         
-        // Convert UTF-8 paths to platform encoding (handles Chinese paths on Windows)
-        std::string native_database_path = UTF8ToPlatform(opts->database_path);
-        std::string native_image_path = UTF8ToPlatform(opts->image_path);
+        auto db_path = PathFromUTF8(opts->database_path);
+        auto img_path = PathFromUTF8(opts->image_path);
         
         // Configure image reader options
         ImageReaderOptions reader_options;
-        reader_options.image_path = native_image_path;
+        reader_options.image_path = img_path;
         reader_options.single_camera = opts->single_camera;
         reader_options.camera_model = opts->camera_model ? opts->camera_model : "SIMPLE_PINHOLE";
         
         // Load image list from file if provided (only process listed images)
         if (opts->image_list_path && std::string(opts->image_list_path).length() > 0) {
-            std::string native_list_path = UTF8ToPlatform(opts->image_list_path);
-            reader_options.image_names = ReadTextFileLines(native_list_path);
+            reader_options.image_names = ReadTextFileLines(PathFromUTF8(opts->image_list_path));
             std::cout << "[COLMAP] Using image list (" << reader_options.image_names.size() 
                       << " images) from: " << opts->image_list_path << std::endl;
         }
@@ -332,7 +327,7 @@ ColmapFeatureExtractorPtr colmap_feature_extractor_create(
         
         // Create feature extractor controller
         extractor->controller = CreateFeatureExtractorController(
-            native_database_path,
+            db_path,
             reader_options,
             extraction_options
         );
@@ -403,11 +398,10 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
     try {
         auto matcher = new ColmapFeatureMatcher();
         
-        // Convert UTF-8 paths to platform encoding (handles Chinese paths on Windows)
-        std::string native_database_path = UTF8ToPlatform(opts->database_path);
-        std::string native_vocab_tree_path;
+        auto db_path = PathFromUTF8(opts->database_path);
+        std::filesystem::path vocab_path;
         if (opts->vocab_tree_path) {
-            native_vocab_tree_path = UTF8ToPlatform(opts->vocab_tree_path);
+            vocab_path = PathFromUTF8(opts->vocab_tree_path);
         }
         
         // Configure matching options
@@ -443,7 +437,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                 
                 // Set vocab tree path if loop detection is enabled
                 if (opts->loop_detection && opts->vocab_tree_path) {
-                    pairing_options.vocab_tree_path = native_vocab_tree_path;
+                    pairing_options.vocab_tree_path = vocab_path;
                 }
                 
                 // Apply quality-specific adjustments
@@ -464,7 +458,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     pairing_options,
                     matching_options,
                     geometry_options,
-                    native_database_path
+                    db_path
                 );
                 break;
             }
@@ -474,7 +468,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     pairing_options,
                     matching_options,
                     geometry_options,
-                    native_database_path
+                    db_path
                 );
                 break;
             }
@@ -484,7 +478,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     return nullptr;
                 }
                 VocabTreePairingOptions pairing_options;
-                pairing_options.vocab_tree_path = native_vocab_tree_path;
+                pairing_options.vocab_tree_path = vocab_path;
                 
                 // Apply quality-specific adjustments
                 switch (opts->quality) {
@@ -509,7 +503,7 @@ ColmapFeatureMatcherPtr colmap_feature_matcher_create(
                     pairing_options,
                     matching_options,
                     geometry_options,
-                    native_database_path
+                    db_path
                 );
                 break;
             }
@@ -582,22 +576,20 @@ ColmapIncrementalMapperPtr colmap_incremental_mapper_create(
         auto mapper = new ColmapIncrementalMapper();
         mapper->reconstruction_manager = mgr->impl;
         
-        // Convert UTF-8 paths to platform encoding (handles Chinese paths on Windows)
-        std::string native_image_path;
-        std::string native_database_path;
+        std::filesystem::path img_path;
+        std::filesystem::path db_path;
         if (opts->image_path) {
-            native_image_path = UTF8ToPlatform(opts->image_path);
+            img_path = PathFromUTF8(opts->image_path);
         }
         if (opts->database_path) {
-            native_database_path = UTF8ToPlatform(opts->database_path);
+            db_path = PathFromUTF8(opts->database_path);
         }
         
         // Configure options
         mapper->options = std::make_shared<IncrementalPipelineOptions>();
         
         // Set image path so COLMAP can extract point colors from images
-        // (moved from constructor parameter to options in upstream refactor)
-        mapper->options->image_path = native_image_path;
+        mapper->options->image_path = img_path;
         
         // Set random seed for deterministic or random reconstruction
         // Fixed seed (>=0) ensures consistent SFM results across multiple runs
@@ -616,7 +608,7 @@ ColmapIncrementalMapperPtr colmap_incremental_mapper_create(
         ConfigureOptionsFromQuality(mapper->options.get(), opts->quality, opts->is_video);
         
         // Open database and create pipeline with shared ownership
-        auto database = Database::Open(native_database_path);
+        auto database = Database::Open(db_path);
         mapper->pipeline = std::make_shared<IncrementalPipeline>(
             mapper->options,
             database,
@@ -737,24 +729,24 @@ ColmapGlobalMapperPtr colmap_global_mapper_create(
         auto mapper = new ColmapGlobalMapper();
         mapper->reconstruction_manager = mgr->impl;
 
-        std::string native_image_path;
-        std::string native_database_path;
+        std::filesystem::path img_path;
+        std::filesystem::path db_path;
         if (opts->image_path) {
-            native_image_path = UTF8ToPlatform(opts->image_path);
+            img_path = PathFromUTF8(opts->image_path);
         }
         if (opts->database_path) {
-            native_database_path = UTF8ToPlatform(opts->database_path);
+            db_path = PathFromUTF8(opts->database_path);
         }
 
-        if (native_database_path.empty()) {
+        if (db_path.empty()) {
             delete mapper;
             return nullptr;
         }
 
-        mapper->database = Database::Open(native_database_path);
+        mapper->database = Database::Open(db_path);
 
         GlobalPipelineOptions options;
-        options.image_path = native_image_path;
+        options.image_path = img_path;
         options.min_num_matches = 15;
         options.num_threads = -1;
         options.random_seed = opts->random_seed >= 0 ? opts->random_seed : -1;
@@ -993,14 +985,13 @@ int32_t colmap_reconstruction_write_text(
     }
     
     try {
-        // Convert UTF-8 path to platform encoding (handles Chinese paths on Windows)
-        std::string native_path = UTF8ToPlatform(path);
+        auto output_path = PathFromUTF8(path);
         
         // Create directory if it doesn't exist
-        CreateDirIfNotExists(native_path, /*recursive=*/true);
+        CreateDirIfNotExists(output_path, /*recursive=*/true);
         
         // Write reconstruction to text files
-        recon->impl->WriteText(native_path);
+        recon->impl->WriteText(output_path);
         
         std::cout << "Successfully wrote reconstruction to " << path << std::endl;
         return 1;
@@ -1023,14 +1014,13 @@ int32_t colmap_reconstruction_write_binary(
     }
     
     try {
-        // Convert UTF-8 path to platform encoding (handles Chinese paths on Windows)
-        std::string native_path = UTF8ToPlatform(path);
+        auto output_path = PathFromUTF8(path);
         
         // Create directory if it doesn't exist
-        CreateDirIfNotExists(native_path, /*recursive=*/true);
+        CreateDirIfNotExists(output_path, /*recursive=*/true);
         
         // Write reconstruction to binary files
-        recon->impl->WriteBinary(native_path);
+        recon->impl->WriteBinary(output_path);
         
         std::cout << "Successfully wrote reconstruction to " << path << std::endl;
         return 1;

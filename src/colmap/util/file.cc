@@ -37,6 +37,10 @@
 #include <mutex>
 #include <sstream>
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 #ifdef COLMAP_DOWNLOAD_ENABLED
 #include <curl/curl.h>
 #if defined(COLMAP_USE_CRYPTOPP)
@@ -55,6 +59,28 @@ extern char** environ;
 #endif
 
 namespace colmap {
+
+std::filesystem::path PathFromUTF8(const std::string& utf8_path) {
+#ifdef _WIN32
+  if (utf8_path.empty()) {
+    return std::filesystem::path();
+  }
+  int wide_len = MultiByteToWideChar(
+      CP_UTF8, 0, utf8_path.c_str(), -1, nullptr, 0);
+  if (wide_len <= 0) {
+    return std::filesystem::path(utf8_path);
+  }
+  std::wstring wide_str(static_cast<size_t>(wide_len), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8_path.c_str(), -1,
+                     &wide_str[0], wide_len);
+  if (!wide_str.empty() && wide_str.back() == L'\0') {
+    wide_str.pop_back();
+  }
+  return std::filesystem::path(wide_str);
+#else
+  return std::filesystem::path(utf8_path);
+#endif
+}
 
 std::string EnsureTrailingSlash(const std::string& str) {
   if (str.length() > 0) {

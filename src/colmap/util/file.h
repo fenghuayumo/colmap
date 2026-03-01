@@ -64,6 +64,11 @@ namespace colmap {
 
 MAKE_ENUM_CLASS(FileCopyType, 0, COPY, HARD_LINK, SOFT_LINK);
 
+// Create std::filesystem::path from UTF-8 string. On Windows, converts via UTF-16
+// to avoid ACP encoding issues with Chinese/Unicode paths. Use this for all
+// paths received from UTF-8 sources (e.g. FFI, JSON).
+std::filesystem::path PathFromUTF8(const std::string& utf8_path);
+
 // Append trailing slash to string if it does not yet end with a slash.
 std::string EnsureTrailingSlash(const std::string& str);
 
