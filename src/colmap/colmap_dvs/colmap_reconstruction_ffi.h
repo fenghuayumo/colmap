@@ -168,6 +168,7 @@ typedef struct {
     bool single_camera;
     bool use_gpu;
     ColmapQuality quality;
+    const char* image_list_path;  // Optional: text file with one image name per line (relative to image_path). NULL = all images.
 } ColmapFeatureExtractorOptions;
 
 typedef struct ColmapFeatureExtractor ColmapFeatureExtractor;

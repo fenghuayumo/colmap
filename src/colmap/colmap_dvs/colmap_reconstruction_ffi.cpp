@@ -290,6 +290,14 @@ ColmapFeatureExtractorPtr colmap_feature_extractor_create(
         reader_options.single_camera = opts->single_camera;
         reader_options.camera_model = opts->camera_model ? opts->camera_model : "SIMPLE_PINHOLE";
         
+        // Load image list from file if provided (only process listed images)
+        if (opts->image_list_path && std::string(opts->image_list_path).length() > 0) {
+            std::string native_list_path = UTF8ToPlatform(opts->image_list_path);
+            reader_options.image_names = ReadTextFileLines(native_list_path);
+            std::cout << "[COLMAP] Using image list (" << reader_options.image_names.size() 
+                      << " images) from: " << opts->image_list_path << std::endl;
+        }
+        
         // Configure feature extraction options
         FeatureExtractionOptions extraction_options;
         extraction_options.use_gpu = opts->use_gpu;
