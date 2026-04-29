@@ -40,6 +40,7 @@ option(IPO_ENABLED "Whether to enable interprocedural optimization" ON)
 option(CUDA_ENABLED "Whether to enable CUDA, if available" ON)
 option(ONNX_ENABLED "Whether to enable ONNX, if available" ON)
 option(GUI_ENABLED "Whether to enable the graphical UI" OFF)
+option(MVS_ENABLED "Whether to enable the Multi-View Stereo module" ON)
 option(OPENGL_ENABLED "Whether to enable OpenGL, if available" ON)
 option(TESTS_ENABLED "Whether to build test binaries" OFF)
 option(COVERAGE_ENABLED "Whether to enable code coverage" OFF)
@@ -57,6 +58,7 @@ option(BENCHMARK_ENABLED "Whether to enable runtime benchmarking support" OFF)
 option(FETCH_POSELIB "Whether to consume PoseLib using FetchContent or find_package" ON)
 option(FETCH_FAISS "Whether to consume faiss using FetchContent or find_package" ON)
 option(FETCH_ONNX "Whether to consume ONNX using FetchContent or find_package" ON)
+option(BUILD_SHARED_LIBS "Whether to build shared libraries (faster linktime, slower runtime)" OFF)
 option(ALL_SOURCE_TARGET "Whether to create a target for all source files (for Visual Studio / XCode development)" OFF)
 
 # Disables default features, as we specify each required feature manually below.
@@ -85,7 +87,7 @@ endif()
 
 project(COLMAP LANGUAGES C CXX)
 
-set(COLMAP_VERSION "3.14.0.dev0")
+set(COLMAP_VERSION "4.1.0.dev0")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -232,6 +234,9 @@ if(CCACHE_ENABLED)
         message(STATUS "Enabling ccache support")
         set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE})
         set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
+        if(CUDA_ENABLED)
+            set(CMAKE_CUDA_COMPILER_LAUNCHER ${CCACHE})
+        endif()
     else()
         message(STATUS "Disabling ccache support")
     endif()
@@ -284,13 +289,17 @@ endif()
 
 COLMAP_ADD_SOURCE_DIR(src/colmap/controllers CONTROLLERS_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/estimators ESTIMATORS_SRCS *.h *.cc)
+COLMAP_ADD_SOURCE_DIR(src/colmap/estimators/cost_functions ESTIMATORS_COST_FUNCTIONS_SRCS *.h *.cc)
+COLMAP_ADD_SOURCE_DIR(src/colmap/estimators/solvers ESTIMATORS_SOLVERS_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/exe EXE_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/colmap_dvs DVSCOLMAP_SRCS *.h *.cc *.cpp)
 COLMAP_ADD_SOURCE_DIR(src/colmap/feature FEATURE_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/geometry GEOMETRY_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/image IMAGE_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/math MATH_SRCS *.h *.cc)
-COLMAP_ADD_SOURCE_DIR(src/colmap/mvs MVS_SRCS *.h *.cc *.cu)
+if(MVS_ENABLED)
+    COLMAP_ADD_SOURCE_DIR(src/colmap/mvs MVS_SRCS *.h *.cc *.cu)
+endif()
 COLMAP_ADD_SOURCE_DIR(src/colmap/optim OPTIM_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/retrieval RETRIEVAL_SRCS *.h *.cc)
 COLMAP_ADD_SOURCE_DIR(src/colmap/scene SCENE_SRCS *.h *.cc)
@@ -314,13 +323,14 @@ if(ALL_SOURCE_TARGET)
     set(ALL_SRCS
         ${CONTROLLERS_SRCS}
         ${ESTIMATORS_SRCS}
+        ${ESTIMATORS_COST_FUNCTIONS_SRCS}
+        ${ESTIMATORS_SOLVERS_SRCS}
         ${EXE_SRCS}
         ${DVSCOLMAP_SRCS}
         ${FEATURE_SRCS}
         ${GEOMETRY_SRCS}
         ${IMAGE_SRCS}
         ${MATH_SRCS}
-        ${MVS_SRCS}
         ${OPTIM_SRCS}
         ${RETRIEVAL_SRCS}
         ${SCENE_SRCS}
@@ -333,6 +343,12 @@ if(ALL_SOURCE_TARGET)
         ${THIRDPARTY_SIFT_GPU_SRCS}
         ${THIRDPARTY_VLFEAT_SRCS}
     )
+
+    if(MVS_ENABLED)
+        list(APPEND ALL_SRCS
+            ${MVS_SRCS}
+        )
+    endif()
 
     if(LSD_ENABLED)
         list(APPEND ALL_SRCS
@@ -391,10 +407,10 @@ set(COLMAP_EXPORT_LIBS
     colmap_geometry
     colmap_image
     colmap_math
-    colmap_mvs
     colmap_optim
     colmap_retrieval
     colmap_scene
+    colmap_scene_types
     colmap_sensor
     colmap_sfm
     colmap_util
@@ -402,6 +418,9 @@ set(COLMAP_EXPORT_LIBS
     colmap_poisson_recon
     colmap_vlfeat
 )
+if(MVS_ENABLED)
+    list(APPEND COLMAP_EXPORT_LIBS colmap_mvs)
+endif()
 if(LSD_ENABLED)
     list(APPEND COLMAP_EXPORT_LIBS
          # Third-party.
@@ -416,8 +435,10 @@ endif()
 if(CUDA_ENABLED)
     list(APPEND COLMAP_EXPORT_LIBS
          colmap_util_cuda
-         colmap_mvs_cuda
     )
+    if(MVS_ENABLED)
+        list(APPEND COLMAP_EXPORT_LIBS colmap_mvs_cuda)
+    endif()
 endif()
 if(GPU_ENABLED)
     list(APPEND COLMAP_EXPORT_LIBS

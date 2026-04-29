@@ -1,4 +1,4 @@
-#include "colmap/sensor/bitmap.h"
+#include "pycolmap/sensor/bitmap.h"
 
 #include "pycolmap/helpers.h"
 #include "pycolmap/pybind11_extension.h"
@@ -21,7 +21,6 @@ py::array_t<uint8_t> ArrayFromBitmap(const Bitmap& self) {
   std::vector<ssize_t> shape = {static_cast<ssize_t>(self.Height()),
                                 static_cast<ssize_t>(self.Width())};
   const auto channels = static_cast<ssize_t>(self.Channels());
-  const bool is_rgb = self.IsRGB();
   if (channels != 1) {
     if (channels != 3) {
       throw std::runtime_error(
@@ -58,8 +57,6 @@ Bitmap BitmapFromArray(py::array_t<uint8_t, py::array::c_style> array,
   }
 
   const bool as_rgb = channels != 1;
-  const size_t pitch = width * channels;
-
   Bitmap output(width,
                 height,
                 /*as_rgb=*/as_rgb,

@@ -36,6 +36,7 @@
 #include "colmap/util/logging.h"
 #include "colmap/util/misc.h"
 #include "colmap/util/opengl_utils.h"
+#include "colmap/util/string.h"
 
 #if defined(COLMAP_GPU_ENABLED)
 #include "thirdparty/SiftGPU/SiftGPU.h"
@@ -51,9 +52,11 @@
 
 #include <array>
 #include <fstream>
+#include <locale>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <sstream>
 
 #include <Eigen/Geometry>
 
@@ -94,8 +97,6 @@ void WarnDarknessAdaptivityNotAvailable() {
 void ThrowCheckFeatureTypesMatch(const FeatureMatcher::Image& image1,
                                  const FeatureMatcher::Image& image2,
                                  bool check_keypoints = false) {
-  THROW_CHECK_NE(image1.image_id, kInvalidImageId);
-  THROW_CHECK_NE(image2.image_id, kInvalidImageId);
   THROW_CHECK_NOTNULL(image1.descriptors);
   THROW_CHECK_NOTNULL(image2.descriptors);
   THROW_CHECK_EQ(image1.descriptors->type, FeatureExtractorType::SIFT);
@@ -1091,13 +1092,13 @@ class SiftCPUFeatureMatcher : public FeatureMatcher {
     Eigen::RowMajorMatrixXi indices_2to1;
     Eigen::RowMajorMatrixXf l2_dists_2to1;
 
-    index2_->Search(
+    THROW_CHECK_NOTNULL(index2_)->Search(
         /*num_neighbors=*/2,
         image1.descriptors->ToFloat(),
         indices_1to2,
         l2_dists_1to2);
     if (options_.sift->cross_check) {
-      index1_->Search(
+      THROW_CHECK_NOTNULL(index1_)->Search(
           /*num_neighbors=*/2,
           image2.descriptors->ToFloat(),
           indices_2to1,
@@ -1141,8 +1142,17 @@ class SiftCPUFeatureMatcher : public FeatureMatcher {
     // coordinates. This properly handles non-pinhole camera models (with
     // distortion) where the fundamental matrix relationship doesn't hold.
     const bool use_essential_matrix =
-        two_view_geometry->config == TwoViewGeometry::CALIBRATED ||
-        two_view_geometry->config == TwoViewGeometry::CALIBRATED_RIG;
+        (two_view_geometry->config == TwoViewGeometry::CALIBRATED ||
+         two_view_geometry->config == TwoViewGeometry::CALIBRATED_RIG) &&
+        two_view_geometry->E.has_value();
+    const bool use_fundamental_matrix =
+        two_view_geometry->config == TwoViewGeometry::UNCALIBRATED &&
+        two_view_geometry->F.has_value();
+    const bool use_homography =
+        (two_view_geometry->config == TwoViewGeometry::PLANAR ||
+         two_view_geometry->config == TwoViewGeometry::PANORAMIC ||
+         two_view_geometry->config == TwoViewGeometry::PLANAR_OR_PANORAMIC) &&
+        two_view_geometry->H.has_value();
     const FeatureKeypoints normalized_keypoints1 =
         use_essential_matrix
             ? NormalizeFeatureKeypoints(*image1.camera, *image1.keypoints)
@@ -1152,10 +1162,15 @@ class SiftCPUFeatureMatcher : public FeatureMatcher {
             ? NormalizeFeatureKeypoints(*image2.camera, *image2.keypoints)
             : FeatureKeypoints();
 
-    const Eigen::Matrix3f E_or_F = use_essential_matrix
-                                       ? two_view_geometry->E->cast<float>()
-                                       : two_view_geometry->F->cast<float>();
-    const Eigen::Matrix3f H = two_view_geometry->H->cast<float>();
+    const Eigen::Matrix3f E_or_F =
+        use_essential_matrix
+            ? Eigen::Matrix3f(two_view_geometry->E->cast<float>())
+        : use_fundamental_matrix
+            ? Eigen::Matrix3f(two_view_geometry->F->cast<float>())
+            : Eigen::Matrix3f::Zero();
+    const Eigen::Matrix3f H =
+        use_homography ? Eigen::Matrix3f(two_view_geometry->H->cast<float>())
+                       : Eigen::Matrix3f::Zero();
 
     const float max_residual =
         use_essential_matrix
@@ -1164,9 +1179,7 @@ class SiftCPUFeatureMatcher : public FeatureMatcher {
             : static_cast<float>(max_error * max_error);
 
     std::function<bool(float, float, float, float)> guided_filter;
-    if (two_view_geometry->config == TwoViewGeometry::CALIBRATED ||
-        two_view_geometry->config == TwoViewGeometry::CALIBRATED_RIG ||
-        two_view_geometry->config == TwoViewGeometry::UNCALIBRATED) {
+    if (use_essential_matrix || use_fundamental_matrix) {
       guided_filter =
           [&](const float x1, const float y1, const float x2, const float y2) {
             const Eigen::Vector3f p1(x1, y1, 1.0f);
@@ -1180,10 +1193,7 @@ class SiftCPUFeatureMatcher : public FeatureMatcher {
                                    epipolar_line2(1) * epipolar_line2(1);
             return nom * nom > max_residual * denom_sq;
           };
-    } else if (two_view_geometry->config == TwoViewGeometry::PLANAR ||
-               two_view_geometry->config == TwoViewGeometry::PANORAMIC ||
-               two_view_geometry->config ==
-                   TwoViewGeometry::PLANAR_OR_PANORAMIC) {
+    } else if (use_homography) {
       guided_filter =
           [&](const float x1, const float y1, const float x2, const float y2) {
             const Eigen::Vector3f p1(x1, y1, 1.0f);
@@ -1570,18 +1580,17 @@ void LoadSiftFeaturesFromTextFile(const std::filesystem::path& path,
 
   std::ifstream file(path);
   THROW_CHECK_FILE_OPEN(file, path);
+  file.imbue(std::locale::classic());
 
   std::string line;
-  std::string item;
 
   std::getline(file, line);
-  std::stringstream header_line_stream(line);
+  std::istringstream header_line_stream(line);
+  header_line_stream.imbue(std::locale::classic());
 
-  std::getline(header_line_stream >> std::ws, item, ' ');
-  const point2D_t num_features = std::stoul(item);
-
-  std::getline(header_line_stream >> std::ws, item, ' ');
-  const size_t dim = std::stoul(item);
+  point2D_t num_features;
+  size_t dim;
+  THROW_CHECK(header_line_stream >> num_features >> dim);
 
   THROW_CHECK_EQ(dim, kSiftDescriptorDim)
       << "SIFT features must have kSiftDescriptorDim dimensions";
@@ -1592,26 +1601,18 @@ void LoadSiftFeaturesFromTextFile(const std::filesystem::path& path,
 
   for (size_t i = 0; i < num_features; ++i) {
     std::getline(file, line);
-    std::stringstream feature_line_stream(line);
+    std::istringstream feature_line_stream(line);
+    feature_line_stream.imbue(std::locale::classic());
 
-    std::getline(feature_line_stream >> std::ws, item, ' ');
-    const float x = std::stold(item);
-
-    std::getline(feature_line_stream >> std::ws, item, ' ');
-    const float y = std::stold(item);
-
-    std::getline(feature_line_stream >> std::ws, item, ' ');
-    const float scale = std::stold(item);
-
-    std::getline(feature_line_stream >> std::ws, item, ' ');
-    const float orientation = std::stold(item);
+    float x, y, scale, orientation;
+    THROW_CHECK(feature_line_stream >> x >> y >> scale >> orientation);
 
     (*keypoints)[i] = FeatureKeypoint(x, y, scale, orientation);
 
     // Descriptor
     for (size_t j = 0; j < dim; ++j) {
-      std::getline(feature_line_stream >> std::ws, item, ' ');
-      const float value = std::stod(item);
+      float value;
+      THROW_CHECK(feature_line_stream >> value);
       THROW_CHECK_GE(value, 0);
       THROW_CHECK_LE(value, 255);
       descriptors->data(i, j) = TruncateCast<float, uint8_t>(value);

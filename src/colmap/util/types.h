@@ -331,6 +331,13 @@ struct filter_view {
   const filter_iterator<Iterator, Predicate> end_;
 };
 
+////////////////////////////////////////////////////////////////////////////////
+// Meta programming utilities / type traits.
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename>
+struct always_false : std::false_type {};
+
 }  // namespace colmap
 
 // This file provides specializations of the templated hash function for
@@ -343,6 +350,16 @@ struct hash<std::pair<uint32_t, uint32_t>> {
     const uint64_t s = (static_cast<uint64_t>(p.first) << 32) +
                        static_cast<uint64_t>(p.second);
     return std::hash<uint64_t>()(s);
+  }
+};
+
+// Hash function specialization for uint64_t pairs, e.g., point3D_t.
+template <>
+struct hash<std::pair<uint64_t, uint64_t>> {
+  std::size_t operator()(const std::pair<uint64_t, uint64_t>& p) const {
+    const std::size_t h1 = std::hash<uint64_t>{}(p.first);
+    const std::size_t h2 = std::hash<uint64_t>{}(p.second);
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
   }
 };
 

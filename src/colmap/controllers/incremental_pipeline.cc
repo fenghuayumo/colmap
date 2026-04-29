@@ -66,6 +66,7 @@ DatabaseCache::Options CreateDatabaseCacheOptions(
       database_cache_options.image_names.insert(image.Name());
     }
   }
+  database_cache_options.load_all_images = options.load_all_images;
   database_cache_options.convert_pose_priors_to_enu =
       options.use_prior_position;
   return database_cache_options;
@@ -239,7 +240,7 @@ bool IncrementalPipelineOptions::Check() const {
   CHECK_OPTION_GT(ba_global_max_num_iterations, 0);
   CHECK_OPTION_GT(ba_local_max_refinements, 0);
   CHECK_OPTION_GE(ba_local_max_refinement_change, 0);
-  CHECK_OPTION_GT(ba_global_max_refinements, 0);
+  CHECK_OPTION_GE(ba_global_max_refinements, 0);
   CHECK_OPTION_GE(ba_global_max_refinement_change, 0);
   CHECK_OPTION_GE(snapshot_frames_freq, 0);
   CHECK_OPTION_GT(prior_position_loss_scale, 0.);
@@ -826,7 +827,8 @@ void IncrementalPipeline::TriangulateReconstruction(
   reconstruction->UpdatePoint3DErrors();
 
   LOG(INFO) << "Extracting colors";
-  reconstruction->ExtractColorsForAllImages(options_->image_path);
+  reconstruction->ExtractColorsForAllImages(options_->image_path,
+                                            options_->num_threads);
 }
 
 void IncrementalPipeline::RegisterCallbacks() {
