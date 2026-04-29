@@ -158,6 +158,7 @@ void OptionManager::ModifyForMediumQuality() {
   patch_match_stereo->geom_consistency = false;
   stereo_fusion->check_num_images /= 1.5;
   stereo_fusion->max_image_size = 1600;
+#endif
   mapper->mapper.ba_global_ignore_redundant_points3D = true;
   mapper->mapper
       .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
@@ -176,26 +177,12 @@ void OptionManager::ModifyForHighQuality() {
   mapper->mapper.ba_global_ignore_redundant_points3D = true;
   mapper->mapper
       .ba_global_ignore_redundant_points3D_min_coverage_gain = 0.1;
+#if defined(COLMAP_MVS_ENABLED)
   patch_match_stereo->max_image_size = 1600;
   stereo_fusion->max_image_size = 1600;
 #endif
 }
 
-void OptionManager::ModifyForHighQuality() {
-  feature_extraction->sift->estimate_affine_shape = true;
-  feature_extraction->max_image_size =
-      static_cast<int>(0.75 * feature_extraction->EffMaxImageSize());
-  feature_extraction->sift->max_num_features = 8192;
-  feature_matching->guided_matching = true;
-  vocab_tree_pairing->max_num_features = 4096;
-  mapper->ba_local_max_num_iterations = 30;
-  mapper->ba_local_max_refinements = 3;
-  mapper->ba_global_max_num_iterations = 75;
-#if defined(COLMAP_MVS_ENABLED)
-  patch_match_stereo->max_image_size = 2400;
-  stereo_fusion->max_image_size = 2400;
-#endif
-}
 
 void OptionManager::ModifyForExtremeQuality() {
   // Most of the options are set to extreme quality by default.

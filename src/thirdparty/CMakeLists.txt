@@ -70,7 +70,12 @@ if(FETCH_FAISS)
     set(FAISS_ENABLE_PYTHON OFF)
     set(FAISS_ENABLE_MKL OFF)
     set(BUILD_TESTING OFF)
+    # CMake 4.x FindOpenMP checks all enabled languages including CUDA,
+    # but NVCC does not support OpenMP. Hide CUDA temporarily during faiss config.
+    set(_SAVE_CUDA_LOADED ${CMAKE_CUDA_COMPILER_LOADED})
+    set(CMAKE_CUDA_COMPILER_LOADED FALSE)
     FetchContent_MakeAvailable(faiss)
+    set(CMAKE_CUDA_COMPILER_LOADED ${_SAVE_CUDA_LOADED})
     # Fix MSVC linker warning LNK4286: faiss headers use FAISS_API which
     # defaults to dllimport on Windows, but we build faiss as a static library.
     # Adding FAISS_MAIN_LIB as PUBLIC ensures consumers also get this defined.
